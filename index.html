@@ -162,7 +162,7 @@
       <div class="reel">✨</div>
     </div>
 
-    <button class="spin" type="button" disabled>
+    <button class="spin" type="button" id="spinButton">
       🎰 СКОРО ЗАПУСК
     </button>
   </section>
@@ -172,6 +172,44 @@
     11.11 — время приятных сюрпризов.
   </p>
 </main>
+
+<script>
+  const reels = document.querySelectorAll(".reel");
+  const spinButton = document.getElementById("spinButton");
+  const symbols = ["🎨", "🎁", "✨", "💎", "⭐", "🎀"];
+
+  let spinning = false;
+
+  spinButton.addEventListener("click", () => {
+    if (spinning) return;
+
+    spinning = true;
+    spinButton.disabled = true;
+    spinButton.textContent = "🎰 КРУТИМ...";
+
+    reels.forEach((reel, index) => {
+      const timer = setInterval(() => {
+        const randomIndex = Math.floor(
+          Math.random() * symbols.length
+        );
+        reel.textContent = symbols[randomIndex];
+      }, 90);
+
+      setTimeout(() => {
+        clearInterval(timer);
+        reel.textContent = symbols[
+          Math.floor(Math.random() * symbols.length)
+        ];
+
+        if (index === reels.length - 1) {
+          spinning = false;
+          spinButton.disabled = false;
+          spinButton.textContent = "🎰 КРУТИТЬ ЕЩЁ";
+        }
+      }, 1300 + index * 550);
+    });
+  });
+</script>
 
 </body>
 </html>
