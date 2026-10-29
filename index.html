@@ -507,6 +507,16 @@
   transform: scaleX(-1);
 }
 
+.prize-result {
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 8px;
+  text-align: left;
+}
+
 </style>
 </head>
 
@@ -554,12 +564,27 @@
     <button class="spin" type="button" id="spinButton">
       🎰 КРУТИТЬ БАРАБАНЫ
     </button>
-   <div class="prize-window">
-  <div class="prize-label">✦ ТВОЙ ВЫИГРЫШ ✦</div>
+   
+<div class="prize-window">
+  <div class="prize-label">✦ ТВОИ ВЫИГРЫШИ ✦</div>
+
+  <div class="attempts-counter" id="attemptsCounter">
+    Сегодня: 0 из 3 прокруток
+  </div>
+
   <div class="prize-result" id="prizeResult">
-    🎁 Испытай свою удачу!
+    <div>1. —</div>
+    <div>2. —</div>
+    <div>3. —</div>
+    <div>4. —</div>
+    <div>5. —</div>
+  </div>
+
+  <div class="limit-message" id="limitMessage">
+    🎰 У тебя есть 3 попытки сегодня!
   </div>
 </div>
+
   </section>
 
   <p class="note">
@@ -575,6 +600,37 @@
   const symbols = ["Глянцевая упаковка WJX с картриджами.png", "🎁", "✨", "💎", "⭐", "🎀"];
   const animations = [];
   let spinning = false;
+
+const maxDailySpins = 3;
+let spinsToday = 0;
+let prizeHistory = [];
+
+const attemptsCounter = document.getElementById("attemptsCounter");
+const prizeResult = document.getElementById("prizeResult");
+const limitMessage = document.getElementById("limitMessage");
+ 
+function updatePrizeHistory() {
+  attemptsCounter.textContent =
+    `Сегодня: ${spinsToday} из ${maxDailySpins} прокруток`;
+
+  prizeResult.innerHTML = "";
+
+  const lastFive = prizeHistory.slice(-5);
+
+  for (let i = 0; i < 5; i++) {
+    const line = document.createElement("div");
+    line.textContent = `${i + 1}. ${lastFive[i] ?? "—"}`;
+    prizeResult.appendChild(line);
+  }
+
+  limitMessage.textContent =
+    spinsToday >= maxDailySpins
+      ? "🔒 На сегодня лимит исчерпан"
+      : `🎰 Осталось попыток: ${maxDailySpins - spinsToday}`;
+}
+
+updatePrizeHistory();
+
 
   const getHeight = reel => reel.clientHeight;
 
@@ -662,21 +718,31 @@ strip.replaceChildren(makeSymbol(finalSymbol, height));
   }
 
   button.addEventListener("click", async () => {
-    if (spinning) return;
+    
+if (spinning || spinsToday >= maxDailySpins) {
+  if (spinsToday >= maxDailySpins) {
+    updatePrizeHistory();
+  }
+  return;
+}
+
 
     spinning = true;
+spinsToday++;
+updatePrizeHistory();
+
     button.disabled = true;
     button.textContent = "🎰 БАРАБАНЫ КРУТЯТСЯ...";
 
    
+
 try {
-  document.getElementById("prizeResult").textContent =
-    "🎰 Барабаны крутятся...";
+  limitMessage.textContent = "🎰 Барабаны крутятся...";
 
   await Promise.all(reels.map(spinReel));
 
-  document.getElementById("prizeResult").textContent =
-    "🎁 Демонстрация завершена!";
+  prizeHistory.push("🎁 Демонстрационная прокрутка");
+  updatePrizeHistory();
 } finally {
       spinning = false;
       button.disabled = false;
