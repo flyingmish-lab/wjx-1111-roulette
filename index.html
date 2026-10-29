@@ -85,7 +85,7 @@
 
   .reels {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 9px;
     padding: 10px;
     border-radius: 20px;
@@ -193,12 +193,15 @@
 
   <section class="machine">
     <div class="machine-title">✦ ПОЙМАЙ СВОЮ УДАЧУ ✦</div>
+   
+<div class="reels">
+  <div class="reel"><div class="reel-strip"></div></div>
+  <div class="reel"><div class="reel-strip"></div></div>
+  <div class="reel"><div class="reel-strip"></div></div>
+  <div class="reel"><div class="reel-strip"></div></div>
+  <div class="reel"><div class="reel-strip"></div></div>
+</div>
 
-    <div class="reels">
-      <div class="reel"><div class="reel-strip"></div></div>
-      <div class="reel"><div class="reel-strip"></div></div>
-      <div class="reel"><div class="reel-strip"></div></div>
-    </div>
 
     <button class="spin" type="button" id="spinButton">
       🎰 КРУТИТЬ БАРАБАНЫ
@@ -230,8 +233,8 @@ function makeSymbol(value, height) {
     const img = document.createElement("img");
     img.src = encodeURI(value);
     img.alt = "Упаковка картриджей WJX";
-    img.style.width = "85%";
-    img.style.height = "90%";
+    img.style.width = "95%";
+    img.style.height = "75%";
     img.style.objectFit = "contain";
     item.appendChild(img);
   } else {
