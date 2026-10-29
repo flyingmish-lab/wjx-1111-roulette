@@ -413,6 +413,38 @@
   letter-spacing: 2px;
 }
 
+.app > h1,
+.app > .eyebrow,
+.app > .subtitle,
+.app > .stars {
+  display: none;
+}
+
+.machine-marquee {
+  position: relative;
+}
+
+.marquee-cloud {
+  position: absolute;
+  top: -25px;
+  color: #fff0d6;
+  font-size: 48px;
+  line-height: 1;
+  -webkit-text-stroke: 2px #211820;
+  text-shadow: 3px 4px 0 #d32b39;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.cloud-left {
+  left: -22px;
+}
+
+.cloud-right {
+  right: -22px;
+  transform: scaleX(-1);
+}
+
 </style>
 </head>
 
@@ -429,10 +461,14 @@
 
  
 <section class="machine">
-  <div class="machine-marquee">
-    <div class="marquee-brand">✦ WJX ✦</div>
-    <div class="marquee-event">11.11 SPECIAL EVENT</div>
-  </div>
+ 
+<div class="machine-marquee">
+  <span class="marquee-cloud cloud-left">☁</span>
+  <span class="marquee-cloud cloud-right">☁</span>
+
+  <div class="marquee-brand">✦ WJX ✦</div>
+  <div class="marquee-event">11.11 SPECIAL EVENT</div>
+</div>
 
   <div class="machine-title">✦ ПОЙМАЙ СВОЮ УДАЧУ ✦</div>
 
