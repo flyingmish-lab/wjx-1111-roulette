@@ -214,18 +214,33 @@
 <script>
   const reels = [...document.querySelectorAll(".reel")];
   const button = document.getElementById("spinButton");
-  const symbols = ["🎨", "🎁", "✨", "💎", "⭐", "🎀"];
+  const symbols = ["Глянцевая упаковка WJX с картриджами.png", "🎁", "✨", "💎", "⭐", "🎀"];
   const animations = [];
   let spinning = false;
 
   const getHeight = reel => reel.clientHeight;
 
-  function makeSymbol(value, height) {
-    const item = document.createElement("div");
-    item.className = "symbol";
-    item.style.height = height + "px";
+ 
+function makeSymbol(value, height) {
+  const item = document.createElement("div");
+  item.className = "symbol";
+  item.style.height = height + "px";
+
+  if (value.endsWith(".png")) {
+    const img = document.createElement("img");
+    img.src = encodeURI(value);
+    img.alt = "Упаковка картриджей WJX";
+    img.style.width = "85%";
+    img.style.height = "90%";
+    img.style.objectFit = "contain";
+    item.appendChild(img);
+  } else {
     item.textContent = value;
-    return item;
+  }
+
+  return item;
+}
+
   }
 
   function randomSymbol() {
@@ -277,9 +292,16 @@
       return;
     }
 
-    const finalSymbol = strip.firstElementChild.textContent;
-    animation.cancel();
-    strip.replaceChildren(makeSymbol(finalSymbol, height));
+   
+const firstItem = strip.firstElementChild;
+const finalImage = firstItem.querySelector("img");
+
+const finalSymbol = finalImage
+  ? decodeURI(new URL(finalImage.src).pathname.split("/").pop())
+  : firstItem.textContent;
+
+animation.cancel();
+strip.replaceChildren(makeSymbol(finalSymbol, height));
     strip.style.transform = "translateY(0)";
   }
 
