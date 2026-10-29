@@ -427,6 +427,7 @@
 }
 
 
+
 .marquee-cloud {
   position: absolute;
   top: -30px;
@@ -434,10 +435,11 @@
   font-size: 75px;
   line-height: 1;
   -webkit-text-stroke: 2px #211820;
-  text-shadow: 4px 5px 0 #d32b39;
+  text-shadow: none;
   pointer-events: none;
   z-index: 2;
 }
+
 
 
 
@@ -450,6 +452,57 @@
   transform: scaleX(-1);
 }
 
+
+/* Плоские мультяшные облака */
+.marquee-cloud {
+  position: absolute;
+  top: -19px;
+  width: 62px;
+  height: 25px;
+  border: 3px solid #211820;
+  border-radius: 25px;
+  background: #fff0d6;
+  pointer-events: none;
+  z-index: 2;
+  box-shadow: 3px 4px 0 #d32b39;
+}
+
+.marquee-cloud::before,
+.marquee-cloud::after {
+  content: "";
+  position: absolute;
+  background: #fff0d6;
+  border: 3px solid #211820;
+  border-radius: 50%;
+}
+
+.marquee-cloud::before {
+  width: 27px;
+  height: 27px;
+  left: 8px;
+  top: -17px;
+}
+
+.marquee-cloud::after {
+  width: 22px;
+  height: 22px;
+  left: 29px;
+  top: -12px;
+}
+
+/* Закрываем нижние части окружностей */
+.marquee-cloud {
+  background-image: linear-gradient(#fff0d6, #fff0d6);
+}
+
+.cloud-left {
+  left: -22px;
+}
+
+.cloud-right {
+  right: -22px;
+  transform: scaleX(-1);
+}
 
 </style>
 </head>
@@ -469,8 +522,9 @@
 <section class="machine">
  
 <div class="machine-marquee">
-  <span class="marquee-cloud cloud-left">☁</span>
-  <span class="marquee-cloud cloud-right">☁</span>
+<span class="marquee-cloud cloud-left" aria-hidden="true"></span>
+<span class="marquee-cloud cloud-right" aria-hidden="true"></span>
+
 
   <div class="marquee-brand">✦ WJX ✦</div>
   <div class="marquee-event">11.11 SPECIAL EVENT</div>
