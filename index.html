@@ -5,6 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WJX 11.11 — Рулетка подарков</title>
+
 <style>
   * { box-sizing: border-box; }
 
@@ -68,9 +69,7 @@
     padding: 22px 16px 25px;
     border: 3px solid #f6d891;
     border-radius: 32px;
-    background: linear-gradient(
-      145deg, #4e9bd9, #2866b1
-    );
+    background: linear-gradient(145deg, #4e9bd9, #2866b1);
     box-shadow:
       0 18px 40px rgba(30,78,143,.25),
       inset 0 3px 12px rgba(255,255,255,.3);
@@ -86,7 +85,7 @@
 
   .reels {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 9px;
     padding: 10px;
     border-radius: 20px;
@@ -94,56 +93,69 @@
   }
 
   .reel {
-    aspect-ratio: 1 / 1.2;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: clamp(35px, 10vw, 50px);
-    background: linear-gradient(
-      #fff, #e9f5ff 55%, #fff
-    );
+    position: relative;
+    height: 130px;
+    overflow: hidden;
     border-radius: 13px;
+    background: linear-gradient(#fff, #e9f5ff 55%, #fff);
     box-shadow: inset 0 0 10px #b3d7f1;
   }
 
-  
-.reel.spinning {
-  animation: reelShake 0.45s ease-in-out infinite;
-  filter: blur(0.4px);
-}
-
+  .reel::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      to bottom,
+      rgba(26,75,130,.18),
+      transparent 32%,
+      transparent 68%,
+      rgba(26,75,130,.18)
+    );
   }
 
-  
-@keyframes reelShake {
-  0%, 100% {
-    transform: translateY(-1px);
+  .reel-strip {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    will-change: transform;
   }
-  50% {
-    transform: translateY(1px);
-  }
-}
 
-    }
+  .symbol {
+    height: 130px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(36px, 10vw, 52px);
+    user-select: none;
   }
 
   .spin {
+    display: block;
     margin-top: 24px;
     width: 100%;
+    min-height: 60px;
     border: 2px solid #fff0bf;
     border-radius: 50px;
-    padding: 17px;
+    padding: 17px 12px;
     font-size: 18px;
     font-weight: bold;
     color: #62420b;
-    background: linear-gradient(
-      #ffe8a1, #f5b94d
-    );
+    background: linear-gradient(#ffe8a1, #f5b94d);
     box-shadow: 0 6px 0 #bb832d;
     cursor: pointer;
+    font-family: inherit;
   }
 
-  .spin:active {
+  .spin:disabled {
+    opacity: 1;
+    color: #62420b;
+    cursor: wait;
+  }
+
+  .spin:active:not(:disabled) {
     transform: translateY(3px);
     box-shadow: 0 3px 0 #bb832d;
   }
@@ -160,10 +172,15 @@
     letter-spacing: 12px;
     margin-bottom: 12px;
   }
+
+  @media (max-width: 360px) {
+    .reel, .symbol { height: 110px; }
+    .machine { padding-left: 12px; padding-right: 12px; }
+  }
 </style>
 </head>
-<body>
 
+<body>
 <div class="cloud one"></div>
 <div class="cloud two"></div>
 
@@ -178,61 +195,108 @@
     <div class="machine-title">✦ ПОЙМАЙ СВОЮ УДАЧУ ✦</div>
 
     <div class="reels">
-      <div class="reel">🎨</div>
-      <div class="reel">🎁</div>
-      <div class="reel">✨</div>
+      <div class="reel"><div class="reel-strip"></div></div>
+      <div class="reel"><div class="reel-strip"></div></div>
+      <div class="reel"><div class="reel-strip"></div></div>
     </div>
 
     <button class="spin" type="button" id="spinButton">
-      🎰 СКОРО ЗАПУСК
+      🎰 КРУТИТЬ БАРАБАНЫ
     </button>
   </section>
 
   <p class="note">
-    Большие подарки от WJX уже близко!<br>
-    11.11 — время приятных сюрпризов.
+    Демонстрация анимации — призы пока не разыгрываются.<br>
+    WJX 11.11 — подарки уже близко!
   </p>
 </main>
 
 <script>
-  const reels = document.querySelectorAll(".reel");
-  const spinButton = document.getElementById("spinButton");
+  const reels = [...document.querySelectorAll(".reel")];
+  const button = document.getElementById("spinButton");
   const symbols = ["🎨", "🎁", "✨", "💎", "⭐", "🎀"];
-
+  const animations = [];
   let spinning = false;
 
-  spinButton.addEventListener("click", () => {
+  const getHeight = reel => reel.clientHeight;
+
+  function makeSymbol(value, height) {
+    const item = document.createElement("div");
+    item.className = "symbol";
+    item.style.height = height + "px";
+    item.textContent = value;
+    return item;
+  }
+
+  function randomSymbol() {
+    return symbols[Math.floor(Math.random() * symbols.length)];
+  }
+
+  function setInitialReel(reel) {
+    const strip = reel.querySelector(".reel-strip");
+    strip.replaceChildren(makeSymbol(randomSymbol(), getHeight(reel)));
+    strip.style.transform = "translateY(0)";
+  }
+
+  reels.forEach(setInitialReel);
+
+  async function spinReel(reel, index) {
+    const strip = reel.querySelector(".reel-strip");
+    const height = getHeight(reel);
+    const count = 28 + index * 7;
+    const fragment = document.createDocumentFragment();
+
+    for (let i = 0; i < count; i++) {
+      fragment.appendChild(makeSymbol(randomSymbol(), height));
+    }
+
+    strip.replaceChildren(fragment);
+    strip.style.transform = "translateY(0)";
+
+    const distance = (count - 1) * height;
+    const duration = 2300 + index * 650;
+
+    const animation = strip.animate(
+      [
+        { transform: "translateY(0)" },
+        { transform: `translateY(-${distance}px)` }
+      ],
+      {
+        duration,
+        easing: "cubic-bezier(0.16, 0.72, 0.22, 1)",
+        fill: "forwards"
+      }
+    );
+
+    animations.push(animation);
+
+    try {
+      await animation.finished;
+    } catch {
+      return;
+    }
+
+    const finalSymbol = strip.lastElementChild.textContent;
+    animation.cancel();
+    strip.replaceChildren(makeSymbol(finalSymbol, height));
+    strip.style.transform = "translateY(0)";
+  }
+
+  button.addEventListener("click", async () => {
     if (spinning) return;
 
     spinning = true;
-    spinButton.disabled = true;
-    spinButton.textContent = "🎰 КРУТИМ...";
+    button.disabled = true;
+    button.textContent = "🎰 БАРАБАНЫ КРУТЯТСЯ...";
 
-    reels.forEach((reel, index) => {
-     reel.classList.add("spinning");
-      const timer = setInterval(() => {
-        const randomIndex = Math.floor(
-          Math.random() * symbols.length
-        );
-        reel.textContent = symbols[randomIndex];
-      }, 90);
-
-      setTimeout(() => {
-        clearInterval(timer);
-       clearInterval(timer);
-        reel.textContent = symbols[
-          Math.floor(Math.random() * symbols.length)
-        ];
-
-        if (index === reels.length - 1) {
-          spinning = false;
-          spinButton.disabled = false;
-          spinButton.textContent = "🎰 КРУТИТЬ ЕЩЁ";
-        }
-      }, 1300 + index * 550);
-    });
+    try {
+      await Promise.all(reels.map(spinReel));
+    } finally {
+      spinning = false;
+      button.disabled = false;
+      button.textContent = "🎰 КРУТИТЬ ЕЩЁ";
+    }
   });
 </script>
-
 </body>
 </html>
