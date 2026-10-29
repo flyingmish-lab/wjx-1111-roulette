@@ -329,14 +329,25 @@
 
 
 
+
 @keyframes leverPull {
-  0%, 100% {
+  0% {
     transform: translateY(0);
   }
-  45% {
+
+  40% {
     transform: translateY(35px);
   }
+
+  65% {
+    transform: translateY(35px);
+  }
+
+  100% {
+    transform: translateY(0);
+  }
 }
+
 
 .lever.pulling {
   animation: none;
@@ -353,6 +364,25 @@
 
 .lever.pulling {
   animation: leverPull 0.6s ease-in-out;
+}
+
+/* Рычаг: убираем боковое смещение */
+.lever,
+.lever:active,
+.lever:focus {
+  transform: none;
+}
+
+/* Основание всегда неподвижно */
+.lever-base {
+  transform: none;
+}
+
+/* Шарик и стержень двигаются только вертикально */
+.lever-ball,
+.lever-stick {
+  transform: translateY(0);
+  transition: none;
 }
 
 </style>
@@ -531,9 +561,15 @@ lever.addEventListener("click", () => {
   button.click();
 });
 
-lever.addEventListener("animationend", () => {
+
+lever.addEventListener("animationend", (event) => {
+  if (event.target !== lever.querySelector(".lever-stick")) {
+    return;
+  }
+
   lever.classList.remove("pulling");
 });
+
 
 </script>
 </body>
