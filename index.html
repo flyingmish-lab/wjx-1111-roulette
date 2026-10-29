@@ -2,12 +2,176 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WJX 11.11 — Рулетка подарков</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WJX 11.11 — Рулетка подарков</title>
+<style>
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: Arial, sans-serif;
+    color: #173b66;
+    background: linear-gradient(
+      160deg, #8bd4ff 0%, #c7eaff 48%, #f3f7ff 100%
+    );
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow-x: hidden;
+  }
+
+  .cloud {
+    position: fixed;
+    width: 260px;
+    height: 85px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.5);
+    filter: blur(25px);
+    pointer-events: none;
+  }
+
+  .cloud.one { top: 12%; left: -90px; }
+  .cloud.two { bottom: 15%; right: -100px; }
+
+  .app {
+    position: relative;
+    width: min(100%, 440px);
+    padding: 32px 20px 40px;
+    text-align: center;
+  }
+
+  .eyebrow {
+    letter-spacing: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    color: #5278a2;
+  }
+
+  h1 {
+    font-size: clamp(44px, 12vw, 66px);
+    margin: 10px 0 0;
+    color: #fff;
+    text-shadow:
+      0 3px 0 #578dc6,
+      0 7px 20px rgba(38,93,164,.35);
+  }
+
+  .subtitle {
+    margin: 8px 0 30px;
+    font-size: 18px;
+    font-weight: bold;
+  }
+
+  .machine {
+    padding: 22px 16px 25px;
+    border: 3px solid #f6d891;
+    border-radius: 32px;
+    background: linear-gradient(
+      145deg, #4e9bd9, #2866b1
+    );
+    box-shadow:
+      0 18px 40px rgba(30,78,143,.25),
+      inset 0 3px 12px rgba(255,255,255,.3);
+  }
+
+  .machine-title {
+    color: #fff4c6;
+    font-weight: bold;
+    letter-spacing: 2px;
+    font-size: 14px;
+    margin-bottom: 18px;
+  }
+
+  .reels {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 9px;
+    padding: 10px;
+    border-radius: 20px;
+    background: #194e8b;
+  }
+
+  .reel {
+    aspect-ratio: 1 / 1.2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(35px, 10vw, 50px);
+    background: linear-gradient(
+      #fff, #e9f5ff 55%, #fff
+    );
+    border-radius: 13px;
+    box-shadow: inset 0 0 10px #b3d7f1;
+  }
+
+  .spin {
+    margin-top: 24px;
+    width: 100%;
+    border: 2px solid #fff0bf;
+    border-radius: 50px;
+    padding: 17px;
+    font-size: 18px;
+    font-weight: bold;
+    color: #62420b;
+    background: linear-gradient(
+      #ffe8a1, #f5b94d
+    );
+    box-shadow: 0 6px 0 #bb832d;
+    cursor: pointer;
+  }
+
+  .spin:active {
+    transform: translateY(3px);
+    box-shadow: 0 3px 0 #bb832d;
+  }
+
+  .note {
+    margin-top: 25px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #5278a2;
+  }
+
+  .stars {
+    color: #f7d078;
+    letter-spacing: 12px;
+    margin-bottom: 12px;
+  }
+</style>
 </head>
 <body>
-  <h1>🎰 WJX 11.11</h1>
-  <p>Скоро здесь появится рулетка подарков!</p>
+
+<div class="cloud one"></div>
+<div class="cloud two"></div>
+
+<main class="app">
+  <div class="stars">✦ ✧ ✦</div>
+  <div class="eyebrow">ПРАЗДНИЧНАЯ АКЦИЯ</div>
+
+  <h1>WJX 11.11</h1>
+  <div class="subtitle">Рулетка подарков 🎁</div>
+
+  <section class="machine">
+    <div class="machine-title">✦ ПОЙМАЙ СВОЮ УДАЧУ ✦</div>
+
+    <div class="reels">
+      <div class="reel">🎨</div>
+      <div class="reel">🎁</div>
+      <div class="reel">✨</div>
+    </div>
+
+    <button class="spin" type="button" disabled>
+      🎰 СКОРО ЗАПУСК
+    </button>
+  </section>
+
+  <p class="note">
+    Большие подарки от WJX уже близко!<br>
+    11.11 — время приятных сюрпризов.
+  </p>
+</main>
+
 </body>
 </html>
