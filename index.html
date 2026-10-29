@@ -251,15 +251,16 @@
     }
 
     strip.replaceChildren(fragment);
-    strip.style.transform = "translateY(0)";
 
     const distance = (count - 1) * height;
     const duration = 2300 + index * 650;
-
+   
+   strip.style.transform = `translateY(-${distance}px)`;
+   
     const animation = strip.animate(
       [
-        { transform: "translateY(0)" },
-        { transform: `translateY(-${distance}px)` }
+        { transform: `translateY(-${distance}px)` },
+        { transform:  "translateY(0)" }
       ],
       {
         duration,
@@ -276,7 +277,7 @@
       return;
     }
 
-    const finalSymbol = strip.lastElementChild.textContent;
+    const finalSymbol = strip.firstElementChild.textContent;
     animation.cancel();
     strip.replaceChildren(makeSymbol(finalSymbol, height));
     strip.style.transform = "translateY(0)";
