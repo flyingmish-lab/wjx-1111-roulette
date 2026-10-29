@@ -281,6 +281,66 @@
   transform: translateY(12px);
 }
 
+.spin {
+  display: none;
+}
+
+.lever {
+  right: -28px;
+  top: 75px;
+  width: 48px;
+  height: 145px;
+  transform-origin: center bottom;
+  transition: transform 0.2s ease;
+}
+
+.lever-ball {
+  width: 46px;
+  height: 46px;
+  border: 4px solid #211820;
+  background: #f52e3c;
+  box-shadow:
+    inset -7px -7px 0 #b51628,
+    inset 5px 5px 0 #ff7777;
+}
+
+.lever-stick {
+  top: 39px;
+  left: 19px;
+  width: 11px;
+  height: 82px;
+  border: 3px solid #211820;
+  background: #fff0d6;
+}
+
+.lever-base {
+  left: 9px;
+  width: 36px;
+  height: 35px;
+  border: 4px solid #211820;
+  background: #a91b2b;
+}
+
+.lever:active {
+  transform: rotate(15deg) translateY(10px);
+}
+
+@keyframes leverPull {
+  0% {
+    transform: rotate(0deg);
+  }
+  45% {
+    transform: rotate(25deg) translateY(12px);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+.lever.pulling {
+  animation: leverPull 0.6s ease-in-out;
+}
+
 </style>
 </head>
 
@@ -448,7 +508,17 @@ try {
   });
  
 lever.addEventListener("click", () => {
+  if (spinning) return;
+
+  lever.classList.remove("pulling");
+  void lever.offsetWidth;
+  lever.classList.add("pulling");
+
   button.click();
+});
+
+lever.addEventListener("animationend", () => {
+  lever.classList.remove("pulling");
 });
 
 </script>
