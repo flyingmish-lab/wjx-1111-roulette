@@ -467,14 +467,17 @@
   box-shadow: 3px 4px 0 #d32b39;
 }
 
+
 .marquee-cloud::before,
 .marquee-cloud::after {
   content: "";
   position: absolute;
   background: #fff0d6;
   border: 3px solid #211820;
-  border-radius: 50%;
+  border-bottom: none;
+  border-radius: 50% 50% 0 0;
 }
+
 
 .marquee-cloud::before {
   width: 27px;
