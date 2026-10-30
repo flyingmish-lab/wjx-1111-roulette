@@ -508,13 +508,24 @@
 }
 
 .prize-result {
-  min-height: 190px;
+  min-height: 110px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
   gap: 8px;
   text-align: left;
+}
+
+.prize-result > div {
+  padding: 6px 4px;
+  border-bottom: 1px solid #d8bba0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.prize-result > div:last-child {
+  border-bottom: none;
 }
 
 </style>
@@ -615,9 +626,9 @@ function updatePrizeHistory() {
 
   prizeResult.innerHTML = "";
 
-  const lastFive = prizeHistory.slice(-5);
+  const lastFive = prizeHistory.slice(-3);
 
-  for (let i = 0; i < 5; i++) {
+for (let i = 0; i < 3; i++) {
     const line = document.createElement("div");
     line.textContent = `${i + 1}. ${lastFive[i] ?? "—"}`;
     prizeResult.appendChild(line);
