@@ -528,7 +528,36 @@
   border-bottom: none;
 }
 
+#eventFinalScreen {
+  background: #fff0d6;
+  border: 3px solid #211820;
+  border-radius: 16px;
+  padding: 15px;
+  margin: 15px 0;
+  text-align: center;
+}
+
+#eventFinalHistory {
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.8;
+  margin: 12px 0;
+}
+
+#claimPrizeButton {
+  background: #c91e36;
+  color: white;
+  border: 2px solid #211820;
+  border-radius: 10px;
+  padding: 12px;
+  width: 100%;
+  font-weight: bold;
+  cursor: pointer;
+}
+
 </style>
+ 
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 
 <body>
@@ -576,6 +605,16 @@
       🎰 КРУТИТЬ БАРАБАНЫ
     </button>
    
+<div id="eventFinalScreen" style="display: none;">
+  <h3>🎁 Розыгрыш завершён!</h3>
+
+  <div id="eventFinalHistory"></div>
+
+  <button id="claimPrizeButton" type="button">
+    🎁 Обратиться за призами
+  </button>
+</div>
+
 <div class="prize-window">
   <div class="prize-label">✦ ТВОИ ВЫИГРЫШИ ✦</div>
 
@@ -613,8 +652,91 @@
   let spinning = false;
 
 const maxDailySpins = 3;
-let spinsToday = 0;
-let prizeHistory = [];
+
+const eventStart = "2026-11-10";
+const eventEnd = "2026-11-13";
+const eventTimeZone = "Europe/Moscow";
+const managerUsername = "Wjx_wjxx";
+const managerUrl = `https://t.me/${managerUsername}`;
+const telegramUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+const telegramUserId = telegramUser?.id || null;
+console.log(
+  "Telegram Mini App:",
+  telegramUserId ? "Пользователь определён" : "Telegram ID недоступен"
+);
+const testMode = true;
+
+ 
+function getMoscowDate() {
+function getEventStatus() {
+function showEventFinalScreen() {
+  const finalScreen = document.getElementById("eventFinalScreen");
+  const finalHistory = document.getElementById("eventFinalHistory");
+  const claimButton = document.getElementById("claimPrizeButton");
+
+  if (getEventStatus() !== "finished") return;
+
+  finalScreen.style.display = "block";
+ document.querySelector(".prize-window").style.display = "none";
+ document.querySelectorAll(".reels, .lever").forEach((element) => {
+  element.style.display = "none";
+});
+
+  if (weeklyPrizeHistory.length === 0) {
+    finalHistory.textContent = "Это событие уже закончилось";
+    claimButton.style.display = "none";
+    return;
+  }
+
+  finalHistory.replaceChildren();
+
+  weeklyPrizeHistory.forEach((entry, index) => {
+    const line = document.createElement("div");
+    line.textContent = `${index + 1}. ${entry.date} — ${entry.prize}`;
+    finalHistory.appendChild(line);
+  });
+
+  claimButton.style.display = "block";
+}
+
+  const today = getMoscowDate();
+
+  if (today < eventStart) {
+    return "before";
+  }
+
+  if (today > eventEnd) {
+    return "finished";
+  }
+
+  return "active";
+}
+
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: eventTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date());
+}
+
+
+const todayKey = getMoscowDate();
+
+const savedData = JSON.parse(
+  localStorage.getItem("wjxSpins") || "{}"
+);
+
+let spinsToday =
+  savedData.date === todayKey ? savedData.spins || 0 : 0;
+
+let prizeHistory =
+  savedData.date === todayKey ? savedData.history || [] : [];
+let weeklyPrizeHistory = JSON.parse(
+  localStorage.getItem("wjxEventHistory") || "[]"
+);
+
+
 
 const attemptsCounter = document.getElementById("attemptsCounter");
 const prizeResult = document.getElementById("prizeResult");
@@ -641,6 +763,7 @@ for (let i = 0; i < 3; i++) {
 }
 
 updatePrizeHistory();
+showEventFinalScreen();
 
 
   const getHeight = reel => reel.clientHeight;
@@ -729,6 +852,17 @@ strip.replaceChildren(makeSymbol(finalSymbol, height));
   }
 
   button.addEventListener("click", async () => {
+const eventStatus = getEventStatus();
+
+
+if (!testMode && eventStatus !== "active") {
+  limitMessage.textContent =
+    eventStatus === "before"
+      ? "🎰 Розыгрыш начнётся 10 ноября!"
+      : "🎁 Розыгрыш уже завершён!";
+  return;
+}
+
     
 if (spinning || spinsToday >= maxDailySpins) {
   if (spinsToday >= maxDailySpins) {
@@ -752,8 +886,27 @@ try {
 
   await Promise.all(reels.map(spinReel));
 
-  prizeHistory.push("🎁 Демонстрационная прокрутка");
-  updatePrizeHistory();
+ 
+prizeHistory.push("🎁 Демонстрационная прокрутка");
+weeklyPrizeHistory.push({
+  date: todayKey,
+  prize: "🎁 Демонстрационная прокрутка"
+});
+
+localStorage.setItem(
+  "wjxEventHistory",
+  JSON.stringify(weeklyPrizeHistory)
+);
+
+
+localStorage.setItem("wjxSpins", JSON.stringify({
+  date: todayKey,
+  spins: spinsToday,
+  history: prizeHistory
+}));
+
+updatePrizeHistory();
+
 } finally {
       spinning = false;
       button.disabled = false;
