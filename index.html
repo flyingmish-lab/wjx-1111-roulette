@@ -664,6 +664,20 @@ console.log(
   "Telegram Mini App:",
   telegramUserId ? "Пользователь определён" : "Telegram ID недоступен"
 );
+const telegramStatus = document.createElement("div");
+
+telegramStatus.textContent = telegramUserId
+  ? "✅ Telegram подключён"
+  : "⚠️ Telegram не определён";
+
+telegramStatus.style.cssText = `
+  text-align: center;
+  font-size: 12px;
+  padding: 8px;
+  color: #211820;
+`;
+
+document.body.appendChild(telegramStatus);
 const testMode = true;
 
  
