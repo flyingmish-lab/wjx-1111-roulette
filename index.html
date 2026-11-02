@@ -660,6 +660,36 @@ const managerUsername = "Wjx_wjxx";
 const managerUrl = `https://t.me/${managerUsername}`;
 const telegramUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
 const telegramUserId = telegramUser?.id || null;
+const telegramInitData = window.Telegram?.WebApp?.initData || "";
+const supabaseFunctionUrl = "https://xfslymkzlzfsrzaoerpn.supabase.co/functions/v1/wjx-roulette";
+async function checkTelegramParticipant() {
+  if (!telegramInitData) {
+    console.log("Telegram authorization data unavailable");
+    return;
+  }
+
+  try {
+    const response = await fetch(supabaseFunctionUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        initData: telegramInitData
+      })
+    });
+
+    const result = await response.json();
+
+    console.log("WJX server response:", result);
+  } catch (error) {
+    console.error("WJX server connection failed:", error);
+  }
+}
+ 
+checkTelegramParticipant();
+
+
 console.log(
   "Telegram Mini App:",
   telegramUserId ? "Пользователь определён" : "Telegram ID недоступен"
