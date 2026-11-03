@@ -122,10 +122,24 @@ background-attachment: fixed;
     #fffdf5 70%,
     #f7e9d0 100%
   );
-  box-shadow:
-    inset 0 3px 8px rgba(55, 30, 20, .15),
-    0 2px 0 rgba(255, 255, 255, .6);
   }
+ .reel {
+  border: 3px solid #3a2116;
+  border-radius: 12px;
+  background: linear-gradient(
+    to bottom,
+    #c8a879 0%,
+    #f2dfb8 18%,
+    #fff0cf 50%,
+    #f2dfb8 82%,
+    #b68b58 100%
+  );
+  box-shadow:
+    inset 0 0 10px rgba(65, 32, 12, 0.45),
+    0 0 0 2px #b98230,
+    0 2px 3px rgba(0, 0, 0, 0.3);
+}
+
 
   .reel::after {
     content: "";
@@ -134,10 +148,10 @@ background-attachment: fixed;
     pointer-events: none;
     background: linear-gradient(
       to bottom,
-      rgba(26,75,130,.18),
+      rgba(75,40,15,.18),
       transparent 32%,
       transparent 68%,
-      rgba(26,75,130,.18)
+      rgba(75,40,15,.18)
     );
   }
 
