@@ -711,20 +711,48 @@ document.body.appendChild(telegramStatus);
 const testMode = true;
 
  
+
 function getMoscowDate() {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: eventTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date());
+
+  const getPart = (type) =>
+    parts.find((part) => part.type === type).value;
+
+  return `${getPart("year")}-${getPart("month")}-${getPart("day")}`;
+}
+
 function getEventStatus() {
+  const today = getMoscowDate();
+
+  if (today < eventStart) {
+    return "before";
+  }
+
+  if (today > eventEnd) {
+    return "finished";
+  }
+
+  return "active";
+}
+
 function showEventFinalScreen() {
+  if (getEventStatus() !== "finished") return;
+
   const finalScreen = document.getElementById("eventFinalScreen");
   const finalHistory = document.getElementById("eventFinalHistory");
   const claimButton = document.getElementById("claimPrizeButton");
 
-  if (getEventStatus() !== "finished") return;
-
   finalScreen.style.display = "block";
- document.querySelector(".prize-window").style.display = "none";
- document.querySelectorAll(".reels, .lever").forEach((element) => {
-  element.style.display = "none";
-});
+  document.querySelector(".prize-window").style.display = "none";
+
+  document.querySelectorAll(".reels, .lever").forEach((element) => {
+    element.style.display = "none";
+  });
 
   if (weeklyPrizeHistory.length === 0) {
     finalHistory.textContent = "Это событие уже закончилось";
@@ -742,28 +770,6 @@ function showEventFinalScreen() {
 
   claimButton.style.display = "block";
 }
-
-  const today = getMoscowDate();
-
-  if (today < eventStart) {
-    return "before";
-  }
-
-  if (today > eventEnd) {
-    return "finished";
-  }
-
-  return "active";
-}
-
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: eventTimeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).format(new Date());
-}
-
 
 const todayKey = getMoscowDate();
 
