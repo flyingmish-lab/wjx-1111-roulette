@@ -851,8 +851,7 @@ const savedData = JSON.parse(
   localStorage.getItem("wjxSpins") || "{}"
 );
 
-let spinsToday =
-  savedData.date === todayKey ? savedData.spins || 0 : 0;
+let spinsToday = 0; // ВРЕМЕННО: проверка счётчика
 
 let prizeHistory =
   savedData.date === todayKey ? savedData.history || [] : [];
