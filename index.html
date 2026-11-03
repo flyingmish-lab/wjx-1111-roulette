@@ -608,7 +608,21 @@ background-attachment: fixed;
   font-weight: bold;
   cursor: pointer;
 }
-
+.bottom-counter {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  margin-top: 8px;
+  padding: 5px 4px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: bold;
+  color: #5a321e;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
 </style>
  
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -672,9 +686,9 @@ background-attachment: fixed;
 <div class="prize-window">
   <div class="prize-label">✦ ТВОИ ВЫИГРЫШИ ✦</div>
 
-  <div class="attempts-counter" id="attemptsCounter">
-    Сегодня: 0 из 3 прокруток
-  </div>
+<div class="attempts-counter" id="attemptsCounter" style="display: none;">
+  Сегодня: 0 из 3 прокруток
+</div>
 
   <div class="prize-result" id="prizeResult">
     <div>1. —</div>
@@ -684,9 +698,10 @@ background-attachment: fixed;
     <div>5. —</div>
   </div>
 
-  <div class="limit-message" id="limitMessage">
-    🎰 У тебя есть 3 попытки сегодня!
-  </div>
+<div class="limit-message" id="limitMessage" style="display: none;"></div>
+ <div class="bottom-counter" id="bottomCounter">
+  🎰 Сегодня: 0 из 3 прокруток
+</div>
 </div>
 
   </section>
@@ -848,10 +863,15 @@ let weeklyPrizeHistory = JSON.parse(
 
 
 const attemptsCounter = document.getElementById("attemptsCounter");
+const bottomCounter = document.getElementById("bottomCounter");
 const prizeResult = document.getElementById("prizeResult");
 const limitMessage = document.getElementById("limitMessage");
  
 function updatePrizeHistory() {
+ bottomCounter.textContent =
+  spinsToday >= maxDailySpins
+    ? "🔒 На сегодня лимит исчерпан"
+    : `🎰 Сегодня: ${spinsToday} из ${maxDailySpins} прокруток`;
   attemptsCounter.textContent =
     `Сегодня: ${spinsToday} из ${maxDailySpins} прокруток`;
 
