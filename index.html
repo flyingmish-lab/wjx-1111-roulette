@@ -562,13 +562,15 @@ background-attachment: fixed;
 }
 
 .prize-result {
-  min-height: 110px;
+  height: 150px;
+  min-height: 150px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  justify-content: flex-start;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 0;
   text-align: left;
+  overflow: hidden;
 }
 
 .prize-result > div {
@@ -612,10 +614,10 @@ background-attachment: fixed;
 }
 .bottom-counter {
   position: absolute;
-  top: 100%;
+  top: 175px;
   left: 0;
   width: 100%;
-  margin-top: 2px;
+  margin-top: 0;
   padding: 5px 4px;
   text-align: center;
   font-size: 12px;
