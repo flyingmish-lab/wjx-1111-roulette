@@ -902,6 +902,12 @@ async function loadServerStatus() {
 const status = await requestServerStatus();
 
 spinsToday = status.spinsUsed;
+prizeHistory = prizeHistory.slice(-spinsToday);
+
+if (spinsToday === 0) {
+  prizeHistory = [];
+}
+
 updatePrizeHistory();
 serverStatusLoaded = true;
   } catch (error) {
