@@ -851,7 +851,8 @@ const savedData = JSON.parse(
   localStorage.getItem("wjxSpins") || "{}"
 );
 
-let spinsToday = 0; // ВРЕМЕННО: проверка счётчика
+let spinsToday =
+  savedData.date === todayKey ? savedData.spins || 0 : 0;
 
 let prizeHistory =
   savedData.date === todayKey ? savedData.history || [] : [];
@@ -891,6 +892,24 @@ for (let i = 0; i < 3; i++) {
 }
 
 updatePrizeHistory();
+ 
+let serverStatusLoaded = false;
+ 
+async function loadServerStatus() {
+  if (!telegramInitData) return;
+
+  try {
+const status = await requestServerStatus();
+
+spinsToday = status.spinsUsed;
+updatePrizeHistory();
+serverStatusLoaded = true;
+  } catch (error) {
+    console.error("Could not load server status:", error);
+  }
+}
+
+loadServerStatus();
 showEventFinalScreen();
 
 
@@ -978,7 +997,58 @@ animation.cancel();
 strip.replaceChildren(makeSymbol(finalSymbol, height));
     strip.style.transform = "translateY(0)";
   }
+async function requestServerStatus() {
+  if (!telegramInitData) {
+    throw new Error("Нет данных Telegram");
+  }
 
+  const response = await fetch(supabaseFunctionUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      initData: telegramInitData,
+      action: "status"
+    })
+  });
+
+  const result = await response.json();
+
+  if (!response.ok || !result.success) {
+    throw new Error(
+      result.error || "Не удалось загрузить попытки"
+    );
+  }
+
+  return result;
+}
+async function requestServerSpin() {
+  if (!telegramInitData) {
+    throw new Error("Открой рулетку через Telegram");
+  }
+
+  const response = await fetch(supabaseFunctionUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      initData: telegramInitData,
+      action: "spin"
+    })
+  });
+
+  const result = await response.json();
+
+  if (!response.ok || !result.success) {
+    throw new Error(
+      result.error || "Не удалось сохранить прокрутку"
+    );
+  }
+
+  return result;
+}
   button.addEventListener("click", async () => {
 const eventStatus = getEventStatus();
 
@@ -992,19 +1062,30 @@ if (!testMode && eventStatus !== "active") {
 }
 
     
-if (spinning || spinsToday >= maxDailySpins) {
-  if (spinsToday >= maxDailySpins) {
-    updatePrizeHistory();
-  }
+if (spinning || !serverStatusLoaded) {
   return;
 }
 
 
-    spinning = true;
-spinsToday++;
-updatePrizeHistory();
+spinning = true;
+button.disabled = true;
 
-    button.disabled = true;
+try {
+  const serverSpin = await requestServerSpin();
+
+  spinsToday = serverSpin.spinNumber;
+  updatePrizeHistory();
+
+} catch (error) {
+  console.error("Server spin failed:", error);
+
+  spinning = false;
+  button.disabled = false;
+  alert("Не удалось выполнить прокрутку: " + error.message);
+  return;
+}
+
+button.disabled = true;
     button.textContent = "🎰 БАРАБАНЫ КРУТЯТСЯ...";
 
    
