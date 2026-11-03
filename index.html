@@ -682,6 +682,24 @@ async function checkTelegramParticipant() {
     const result = await response.json();
 
     console.log("WJX server response:", result);
+const serverStatus = document.createElement("div");
+
+serverStatus.style.cssText = `
+  text-align: center;
+  padding: 12px;
+  font-size: 13px;
+  color: #9b1c2c;
+  background: #fff0d6;
+  border-radius: 10px;
+  margin: 10px;
+`;
+
+serverStatus.textContent = response.ok
+  ? "✅ Supabase: участник сохранён"
+  : `❌ Supabase (${response.status}): ${result.error || "Неизвестная ошибка"}`;
+
+document.querySelector(".app").appendChild(serverStatus);
+
   } catch (error) {
     console.error("WJX server connection failed:", error);
   }
