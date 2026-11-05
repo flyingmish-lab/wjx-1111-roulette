@@ -720,7 +720,14 @@ background-attachment: fixed;
   const reels = [...document.querySelectorAll(".reel")];
   const button = document.getElementById("spinButton");
   const lever = document.getElementById("leverButton");
-  const symbols = ["Глянцевая упаковка WJX с картриджами.png", "🎁", "✨", "💎", "⭐", "🎀"];
+  const symbols = [
+  "приз картридж.png",
+  "расходники.png",
+  "скидка1.png",
+  "Noir Blade.png",
+  "Soul Ink 1.png",
+  "бандажка.png"
+];
   const animations = [];
   let spinning = false;
 
@@ -931,13 +938,14 @@ function makeSymbol(value, height) {
   item.className = "symbol";
   item.style.height = height + "px";
 
-  if (value.endsWith(".png")) {
+if (value.toLowerCase().endsWith(".png")) {
     const img = document.createElement("img");
     img.src = encodeURI(value);
     img.alt = "Упаковка картриджей WJX";
-    img.style.width = "95%";
-    img.style.height = "75%";
+    img.style.width = "90%";
+    img.style.height = "90%";
     img.style.objectFit = "contain";
+    img.style.display = "block";
     item.appendChild(img);
   } else {
     item.textContent = value;
