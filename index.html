@@ -565,14 +565,24 @@ background-attachment: fixed;
 }
 
 #eventFinalScreen {
+  position: absolute;
+  top: 63%;
+  left: 15%;
+  width: 70%;
+  z-index: 10;
   background: #fff0d6;
   border: 3px solid #211820;
-  border-radius: 16px;
-  padding: 15px;
-  margin: 15px 0;
+  border-radius: 12px;
+  padding: 10px;
+  margin: 0;
   text-align: center;
+  font-size: 12px;
 }
 
+ #eventFinalScreen h3 {
+  font-size: 13px;
+  margin: 0 0 6px;
+}
 #eventFinalHistory {
   text-align: left;
   font-size: 13px;
@@ -580,12 +590,14 @@ background-attachment: fixed;
   margin: 12px 0;
 }
 
+ 
 #claimPrizeButton {
   background: #c91e36;
   color: white;
   border: 2px solid #211820;
   border-radius: 10px;
-  padding: 12px;
+  padding: 7px 5px;
+  font-size: 11px;
   width: 100%;
   font-weight: bold;
   cursor: pointer;
@@ -835,9 +847,6 @@ function showEventFinalScreen() {
   finalScreen.style.display = "block";
   document.querySelector(".prize-window").style.display = "none";
 
-  document.querySelectorAll(".reels, .lever").forEach((element) => {
-    element.style.display = "none";
-  });
 
   if (weeklyPrizeHistory.length === 0) {
     finalHistory.textContent = "Это событие уже закончилось";
