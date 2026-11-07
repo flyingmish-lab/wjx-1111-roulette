@@ -725,6 +725,13 @@ const eventEnd = "2026-11-12";
 const eventTimeZone = "Europe/Moscow";
 const managerUsername = "Wjx_wjxx";
 const managerUrl = `https://t.me/${managerUsername}`;
+document.getElementById("claimPrizeButton").addEventListener("click", () => {
+  if (window.Telegram?.WebApp?.openTelegramLink) {
+    window.Telegram.WebApp.openTelegramLink(managerUrl);
+  } else {
+    window.open(managerUrl, "_blank");
+  }
+});
 const telegramUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
 const telegramUserId = telegramUser?.id || null;
 const telegramInitData = window.Telegram?.WebApp?.initData || "";
@@ -816,7 +823,10 @@ function getEventStatus() {
 }
 
 function showEventFinalScreen() {
-  if (getEventStatus() !== "finished") return;
+  const eventFinished = getEventStatus() === "finished";
+  const testFinished = testMode && spinsToday >= maxDailySpins;
+
+  if (!eventFinished && !testFinished) return;
 
   const finalScreen = document.getElementById("eventFinalScreen");
   const finalHistory = document.getElementById("eventFinalHistory");
@@ -843,7 +853,13 @@ function showEventFinalScreen() {
     finalHistory.appendChild(line);
   });
 
-  claimButton.style.display = "block";
+  const hasPrize = weeklyPrizeHistory.some(
+  entry =>
+    entry.prize.startsWith("🎁 ") &&
+    entry.prize !== "🎁 Без выигрыша"
+);
+
+claimButton.style.display = hasPrize ? "block" : "none";
 }
 
 const todayKey = getMoscowDate();
@@ -916,8 +932,9 @@ serverStatusLoaded = true;
   }
 }
 
-loadServerStatus();
-showEventFinalScreen();
+loadServerStatus().then(() => {
+  showEventFinalScreen();
+});
 
 
   const getHeight = reel => reel.clientHeight;
@@ -1153,6 +1170,7 @@ localStorage.setItem("wjxSpins", JSON.stringify({
 }));
 
 updatePrizeHistory();
+showEventFinalScreen();
 
 } finally {
       spinning = false;
