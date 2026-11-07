@@ -699,12 +699,12 @@ background-attachment: fixed;
   const button = document.getElementById("spinButton");
   const lever = document.getElementById("leverButton");
   const symbols = [
-  "приз картридж.png",
-  "расходники.png",
-  "скидка1.png",
-  "Noir Blade.png",
-  "Soul Ink 1.png",
-  "бандажка.png"
+  "приз картридж.webp",
+  "расходники.webp",
+  "скидка1.webp",
+  "Noir Blade.webp",
+  "Soul Ink 1.webp",
+  "бандажка.webp"
 ];
   const animations = [];
   let spinning = false;
@@ -916,7 +916,7 @@ function makeSymbol(value, height) {
   item.className = "symbol";
   item.style.height = height + "px";
 
-if (value.toLowerCase().endsWith(".png")) {
+if (/\.(png|webp)$/i.test(value)) {
     const img = document.createElement("img");
     img.src = encodeURI(value);
     img.alt = "Упаковка картриджей WJX";
