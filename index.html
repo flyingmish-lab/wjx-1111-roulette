@@ -780,7 +780,10 @@ console.log(
   telegramUserId ? "Пользователь определён" : "Telegram ID недоступен"
 );
 
-const testMode = false;
+const adminTelegramId = 221535678;
+
+const testMode =
+  window.Telegram?.WebApp?.initDataUnsafe?.user?.id === adminTelegramId;
 
  
 
