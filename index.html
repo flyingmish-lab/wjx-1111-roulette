@@ -447,6 +447,27 @@ background-attachment: fixed;
 .machine-title {
   display: none;
 }
+
+ #finishedMessage {
+  position: absolute;
+  top: 36.5%;
+  left: 16%;
+  width: 68%;
+  height: 18%;
+  z-index: 6;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  color: #fff0d6;
+  background: #8f1828;
+  border: 3px solid #3a2116;
+  border-radius: 12px;
+  font-size: clamp(13px, 3.5vw, 20px);
+  font-weight: 900;
+  text-align: center;
+  text-shadow: 1px 2px 2px #3a2116;
+}
 .reels {
   position: absolute;
   top: 36.5%;
@@ -592,13 +613,19 @@ background-attachment: fixed;
 
  
 #claimPrizeButton {
+  display: none;
+  position: absolute;
+  top: 43cqw;
+  left: 0;
+  width: 100%;
+  z-index: 7;
+  margin: 0;
+  padding: 5px 4px;
   background: #c91e36;
   color: white;
   border: 2px solid #211820;
-  border-radius: 10px;
-  padding: 7px 5px;
+  border-radius: 8px;
   font-size: 11px;
-  width: 100%;
   font-weight: bold;
   cursor: pointer;
 }
@@ -647,7 +674,9 @@ background-attachment: fixed;
   <div class="machine-title">✦ ПОЙМАЙ СВОЮ УДАЧУ ✦</div>
 
    
-
+<div id="finishedMessage" style="display: none;">
+  🎁 РОЗЫГРЫШ ОКОНЧЕН!
+</div>
 <div class="reels">
   <div class="reel"><div class="reel-strip"></div></div>
   <div class="reel"><div class="reel-strip"></div></div>
@@ -672,9 +701,7 @@ background-attachment: fixed;
 
   <div id="eventFinalHistory"></div>
 
-  <button id="claimPrizeButton" type="button">
-    🎁 Обратиться за призами
-  </button>
+
 </div>
 
 <div class="prize-window">
@@ -696,6 +723,10 @@ background-attachment: fixed;
  <div class="bottom-counter" id="bottomCounter">
   🎰 Сегодня: 0 из 3 прокруток
 </div>
+ 
+   <button id="claimPrizeButton" type="button">
+    🎁 Обратиться за призами
+  </button>
 </div>
 
   </section>
@@ -844,15 +875,19 @@ function showEventFinalScreen() {
   const finalHistory = document.getElementById("eventFinalHistory");
   const claimButton = document.getElementById("claimPrizeButton");
 
-  finalScreen.style.display = "block";
-  document.querySelector(".prize-window").style.display = "none";
+  finalScreen.style.display = "none";
+  document.getElementById("finishedMessage").style.display = "flex";
+  document.querySelector(".reels").style.display = "none";
+  document.querySelector(".lever").style.display = "none";
+  document.getElementById("bottomCounter").style.display = "none";
 
 
-  if (weeklyPrizeHistory.length === 0) {
-    finalHistory.textContent = "Это событие уже закончилось";
-    claimButton.style.display = "none";
-    return;
-  }
+
+ if (weeklyPrizeHistory.length === 0) {
+  finalHistory.textContent = "Это событие уже закончилось";
+  claimButton.style.display = "none";
+  return;
+}
 
   finalHistory.replaceChildren();
 
