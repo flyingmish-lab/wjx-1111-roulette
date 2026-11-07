@@ -1080,8 +1080,24 @@ if (spinning || !serverStatusLoaded) {
 spinning = true;
 button.disabled = true;
 
+let selectedPrize = null;
+let reelResults = [];
+
 try {
   const serverSpin = await requestServerSpin();
+
+  selectedPrize = serverSpin.prize;
+
+  if (selectedPrize && prizeImages[selectedPrize]) {
+    reelResults = Array(4).fill(prizeImages[selectedPrize]);
+  } else {
+    reelResults = [
+      symbols[0],
+      symbols[1],
+      symbols[2],
+      symbols[3]
+    ];
+  }
 
   spinsToday = serverSpin.spinNumber;
   updatePrizeHistory();
@@ -1103,13 +1119,22 @@ button.disabled = true;
 try {
   limitMessage.textContent = "🎰 Барабаны крутятся...";
 
-  await Promise.all(reels.map(spinReel));
+  await Promise.all(
+  reels.map((reel, index) =>
+    spinReel(reel, index, reelResults[index])
+  )
+);
 
  
-prizeHistory.push("🎁 Демонстрационная прокрутка");
+const prizeText = selectedPrize
+  ? "🎁 " + selectedPrize
+  : "Без выигрыша";
+
+prizeHistory.push(prizeText);
+
 weeklyPrizeHistory.push({
   date: todayKey,
-  prize: "🎁 Демонстрационная прокрутка"
+  prize: prizeText
 });
 
 localStorage.setItem(
