@@ -1121,13 +1121,15 @@ updatePrizeHistory();
   });
  
 lever.addEventListener("click", () => {
-  if (spinning) return;
+  if (spinning || lever.classList.contains("pulling")) return;
 
   lever.classList.remove("pulling");
   void lever.offsetWidth;
   lever.classList.add("pulling");
 
-  button.click();
+  setTimeout(() => {
+    button.click();
+  }, 800);
 });
 
 
