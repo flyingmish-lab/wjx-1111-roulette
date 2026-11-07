@@ -953,15 +953,19 @@ if (/\.(png|webp)$/i.test(value)) {
 
   reels.forEach(setInitialReel);
 
-  async function spinReel(reel, index) {
+  async function spinReel(reel, index, targetSymbol) {
     const strip = reel.querySelector(".reel-strip");
     const height = getHeight(reel);
     const count = 28 + index * 7;
     const fragment = document.createDocumentFragment();
 
     for (let i = 0; i < count; i++) {
-      fragment.appendChild(makeSymbol(randomSymbol(), height));
-    }
+  const symbol = i === 0 && targetSymbol
+    ? targetSymbol
+    : randomSymbol();
+
+  fragment.appendChild(makeSymbol(symbol, height));
+}
 
     strip.replaceChildren(fragment);
 
