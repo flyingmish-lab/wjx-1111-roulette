@@ -110,7 +110,18 @@
         <input id="testMode" type="checkbox">
       </div>
     </div>
-
+    
+<button
+  id="viewPrizesButton"
+  type="button"
+  style="margin-bottom: 15px;"
+>
+  🎁 Призы и выигрыши
+</button>
+  <div
+  id="prizesPanel"
+  style="display:none; margin-bottom:20px; text-align:left;"
+></div>
     <button
   id="resetTestSpinsButton"
   type="button"
@@ -241,6 +252,12 @@
 
 document.getElementById("saveButton").addEventListener("click", saveSettings);
 document.getElementById("resetTestSpinsButton").addEventListener("click", resetTestSpins);
+document.getElementById("viewPrizesButton").addEventListener("click", () => {
+  const panel = document.getElementById("prizesPanel");
+
+  panel.style.display =
+    panel.style.display === "none" ? "block" : "none";
+});
     loadSettings();
 </script> 
   
