@@ -654,6 +654,11 @@ background-attachment: fixed;
 <div class="cloud two"></div>
 
 <main class="app">
+ <a id="adminPanelLink"
+   href="admin.html"
+   style="display:none; position:relative; z-index:20; margin-bottom:12px; padding:12px; background:#991b32; color:white; border-radius:12px; text-decoration:none; font-weight:bold;">
+  ⚙️ Админ-панель
+</a>
   <div class="stars">✦ ✧ ✦</div>
   <div class="eyebrow">ПРАЗДНИЧНАЯ АКЦИЯ</div>
 
@@ -831,6 +836,14 @@ console.log(
 );
 
 const adminTelegramId = 221535678;
+const adminTelegramIds = [221535678, 382749857];
+document.getElementById("adminPanelLink").addEventListener("click", () => {
+  sessionStorage.setItem("wjxAdminInitData", telegramInitData);
+});
+
+if (adminTelegramIds.includes(telegramUserId)) {
+  document.getElementById("adminPanelLink").style.display = "inline-block";
+}
 
 const testMode =
   window.Telegram?.WebApp?.initDataUnsafe?.user?.id === adminTelegramId;
