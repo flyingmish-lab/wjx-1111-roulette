@@ -188,6 +188,40 @@
     alert("Ошибка: " + error.message);
   }
 }
+    async function loadPrizes() {
+  const panel = document.getElementById("prizesPanel");
+  panel.textContent = "⏳ Загружаем призы...";
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "admin_get_prizes",
+        initData: adminInitData
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || "Ошибка загрузки призов");
+    }
+
+    panel.textContent = "";
+
+    for (const item of result.prizes) {
+      const line = document.createElement("p");
+      line.textContent =
+        `${item.prize} — шанс ${item.chance}% | ` +
+        `Выигрышей: ${item.realWins} | ` +
+        `Тестовых: ${item.testWins}`;
+      panel.appendChild(line);
+    }
+  } catch (error) {
+    panel.textContent = "❌ " + error.message;
+  }
+}
     async function resetTestSpins() {
   if (!confirm("Сбросить сегодняшние тестовые прокрутки?")) return;
 
@@ -252,11 +286,15 @@
 
 document.getElementById("saveButton").addEventListener("click", saveSettings);
 document.getElementById("resetTestSpinsButton").addEventListener("click", resetTestSpins);
-document.getElementById("viewPrizesButton").addEventListener("click", () => {
+document.getElementById("viewPrizesButton").addEventListener("click", async () => {
   const panel = document.getElementById("prizesPanel");
 
-  panel.style.display =
-    panel.style.display === "none" ? "block" : "none";
+  if (panel.style.display === "none") {
+    panel.style.display = "block";
+    await loadPrizes();
+  } else {
+    panel.style.display = "none";
+  }
 });
     loadSettings();
 </script> 
