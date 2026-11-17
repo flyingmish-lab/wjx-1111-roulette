@@ -770,6 +770,8 @@ let maxDailySpins = 3;
 
 let eventStart = "2026-11-26";
 let eventEnd = "2026-11-28";
+let eventStartTime = "10:00";
+let eventEndTime = "23:59";
 const eventTimeZone = "Europe/Moscow";
 const managerUsername = "Wjx_wjxx";
 const managerUrl = `https://t.me/${managerUsername}`;
@@ -800,7 +802,11 @@ const supabaseFunctionUrl = "https://xfslymkzlzfsrzaoerpn.supabase.co/functions/
     const result = await response.json();
 
     if (response.ok && result.success) {
-      maxDailySpins = result.spinsUsed + result.spinsRemaining;
+      maxDailySpins = result.settings.daily_spins;
+eventStart = result.settings.event_start;
+eventEnd = result.settings.event_end;
+eventStartTime = result.settings.start_time.slice(0, 5);
+eventEndTime = result.settings.end_time.slice(0, 5);
       updatePrizeHistory();
     }
   } catch (error) {
@@ -868,8 +874,7 @@ if (adminTelegramIds.includes(telegramUserId)) {
   document.getElementById("adminPanelLink").style.display = "inline-block";
 }
 
-const testMode =
-  window.Telegram?.WebApp?.initDataUnsafe?.user?.id === adminTelegramId;
+const testMode = adminTelegramIds.includes(telegramUserId);
 
  
 
@@ -888,15 +893,23 @@ function getMoscowDate() {
 }
 
 function getEventStatus() {
-  const today = getMoscowDate();
+  const now = new Date();
 
-  if (today < eventStart) {
-    return "before";
-  }
+  const moscowDateTime = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Europe/Moscow",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).format(now);
 
-  if (today > eventEnd) {
-    return "finished";
-  }
+  const start = `${eventStart} ${eventStartTime}`;
+  const end = `${eventEnd} ${eventEndTime}`;
+
+  if (moscowDateTime < start) return "before";
+  if (moscowDateTime > end) return "finished";
 
   return "active";
 }
@@ -1167,7 +1180,7 @@ const eventStatus = getEventStatus();
 if (!testMode && eventStatus !== "active") {
   alert(
     eventStatus === "before"
-      ? "🎰 Розыгрыш начнётся 10 ноября! Ждём тебя!"
+      ? `🎰 Розыгрыш начнётся ${eventStart} в ${eventStartTime} МСК! Ждём тебя!`
       : "🎁 Розыгрыш уже завершён!"
   );
   return;
