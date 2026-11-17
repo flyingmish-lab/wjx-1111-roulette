@@ -766,10 +766,10 @@ background-attachment: fixed;
   const animations = [];
   let spinning = false;
 
-const maxDailySpins = 3;
+let maxDailySpins = 3;
 
-const eventStart = "2026-11-10";
-const eventEnd = "2026-11-12";
+let eventStart = "2026-11-26";
+let eventEnd = "2026-11-28";
 const eventTimeZone = "Europe/Moscow";
 const managerUsername = "Wjx_wjxx";
 const managerUrl = `https://t.me/${managerUsername}`;
@@ -784,6 +784,29 @@ const telegramUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
 const telegramUserId = telegramUser?.id || null;
 const telegramInitData = window.Telegram?.WebApp?.initData || "";
 const supabaseFunctionUrl = "https://xfslymkzlzfsrzaoerpn.supabase.co/functions/v1/wjx-roulette";
+ async function loadRouletteSettings() {
+  if (!telegramInitData) return;
+
+  try {
+    const response = await fetch(supabaseFunctionUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "status",
+        initData: telegramInitData
+      })
+    });
+
+    const result = await response.json();
+
+    if (response.ok && result.success) {
+      maxDailySpins = result.spinsUsed + result.spinsRemaining;
+      updatePrizeHistory();
+    }
+  } catch (error) {
+    console.error("Ошибка загрузки лимита:", error);
+  }
+}
 async function checkTelegramParticipant() {
   if (!telegramInitData) {
     console.log("Telegram authorization data unavailable");
@@ -989,9 +1012,11 @@ serverStatusLoaded = true;
   }
 }
 
-loadServerStatus().then(() => {
+loadServerStatus().then(async () => {
+  await loadRouletteSettings();
   showEventFinalScreen();
 });
+
 
 
   const getHeight = reel => reel.clientHeight;
