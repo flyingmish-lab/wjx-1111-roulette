@@ -1,0 +1,122 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WJX — Админ-панель</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #f7f1eb;
+      font-family: Arial, sans-serif;
+      color: #29202a;
+    }
+
+    .panel {
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: #991b32;
+      text-align: center;
+      font-size: 26px;
+    }
+
+    .card {
+      background: white;
+      padding: 20px;
+      border-radius: 16px;
+      margin: 16px 0;
+      box-shadow: 0 3px 12px #00000012;
+    }
+
+    h2 { font-size: 18px; }
+
+    label {
+      display: block;
+      margin: 15px 0 6px;
+      font-weight: bold;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #d5c9c9;
+      border-radius: 9px;
+      font-size: 16px;
+    }
+
+    .toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .toggle input { width: 24px; height: 24px; }
+
+    button {
+      width: 100%;
+      padding: 15px;
+      background: #991b32;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 17px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .note {
+      color: #786d73;
+      font-size: 13px;
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="panel">
+    <h1>⚙️ WJX Админ-панель</h1>
+
+    <div class="card">
+      <h2>📅 Даты розыгрыша</h2>
+
+      <label for="startDate">Дата начала</label>
+      <input id="startDate" type="date" value="2026-11-26">
+
+      <label for="endDate">Дата окончания</label>
+      <input id="endDate" type="date" value="2026-11-28">
+    </div>
+
+    <div class="card">
+      <h2>🎰 Настройки рулетки</h2>
+
+      <label for="dailySpins">Прокруток в день</label>
+      <input id="dailySpins" type="number" min="1" max="20" value="3">
+
+      <div class="toggle">
+        <label for="testMode">🧪 Тестовый режим</label>
+        <input id="testMode" type="checkbox">
+      </div>
+    </div>
+
+    <button id="saveButton" type="button" disabled>
+      💾 Сохранить настройки
+    </button>
+
+    <p class="note">
+      Демонстрационная страница.
+      Сохранение заработает после подключения Supabase
+      и проверки прав администратора.
+    </p>
+  </main>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</body>
+</html>
