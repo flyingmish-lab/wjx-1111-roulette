@@ -111,6 +111,13 @@
       </div>
     </div>
 
+    <button
+  id="resetTestSpinsButton"
+  type="button"
+  style="margin-bottom: 15px;"
+>
+  🔄 Сбросить тестовые прокрутки
+</button>
     <button id="saveButton" type="button" disabled>
       💾 Сохранить настройки
     </button>
@@ -170,6 +177,30 @@
     alert("Ошибка: " + error.message);
   }
 }
+    async function resetTestSpins() {
+  if (!confirm("Сбросить сегодняшние тестовые прокрутки?")) return;
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "admin_reset_test_spins",
+        initData: adminInitData
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || "Ошибка сброса");
+    }
+
+    alert("✅ Тестовые прокрутки сброшены!");
+  } catch (error) {
+    alert("❌ " + error.message);
+  }
+}
     async function saveSettings() {
   const button = document.getElementById("saveButton");
   button.disabled = true;
@@ -209,6 +240,7 @@
 }
 
 document.getElementById("saveButton").addEventListener("click", saveSettings);
+document.getElementById("resetTestSpinsButton").addEventListener("click", resetTestSpins);
     loadSettings();
 </script> 
   
