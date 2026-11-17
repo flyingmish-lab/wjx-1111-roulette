@@ -110,13 +110,91 @@
       💾 Сохранить настройки
     </button>
 
-    <p class="note">
-      Демонстрационная страница.
-      Сохранение заработает после подключения Supabase
-      и проверки прав администратора.
-    </p>
+<p class="note">
+  ⚙️ Настройки сохраняются в Supabase.
+  Управление доступно только администратору через Telegram.
+</p>
   </main>
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+  const telegram = window.Telegram?.WebApp;
+  telegram?.ready();
+
+  const apiUrl = "https://xfslymkzlzfsrzaoerpn.supabase.co/functions/v1/wjx-roulette";
+    async function loadSettings() {
+  if (!telegram?.initData) {
+    alert("Открой админ-панель через Telegram.");
+    return;
+  }
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        action: "admin_get_settings",
+        initData: telegram.initData
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || "Не удалось загрузить настройки");
+    }
+
+    document.getElementById("startDate").value = result.settings.event_start;
+    document.getElementById("endDate").value = result.settings.event_end;
+    document.getElementById("dailySpins").value = result.settings.daily_spins;
+    document.getElementById("testMode").checked = result.settings.test_mode;
+
+    document.getElementById("saveButton").disabled = false;
+  } catch (error) {
+    alert("Ошибка: " + error.message);
+  }
+}
+    async function saveSettings() {
+  const button = document.getElementById("saveButton");
+  button.disabled = true;
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        action: "admin_save_settings",
+        initData: telegram.initData,
+        settings: {
+          event_start: document.getElementById("startDate").value,
+          event_end: document.getElementById("endDate").value,
+          daily_spins: Number(document.getElementById("dailySpins").value),
+          test_mode: document.getElementById("testMode").checked
+        }
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || "Не удалось сохранить настройки");
+    }
+
+    alert("✅ Настройки сохранены!");
+  } catch (error) {
+    alert("Ошибка: " + error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+document.getElementById("saveButton").addEventListener("click", saveSettings);
+    loadSettings();
+</script> 
+  
 </body>
 </html>
