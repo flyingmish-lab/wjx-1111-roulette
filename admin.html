@@ -119,11 +119,15 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script>
   const telegram = window.Telegram?.WebApp;
+    const adminInitData =
+  telegram?.initData ||
+  sessionStorage.getItem("wjxAdminInitData") ||
+  "";
   telegram?.ready();
 
   const apiUrl = "https://xfslymkzlzfsrzaoerpn.supabase.co/functions/v1/wjx-roulette";
     async function loadSettings() {
-  if (!telegram?.initData) {
+  if (!adminInitData) {
     alert("Открой админ-панель через Telegram.");
     return;
   }
@@ -136,7 +140,7 @@
       },
       body: JSON.stringify({
         action: "admin_get_settings",
-        initData: telegram.initData
+        initData: adminInitData
       })
     });
 
@@ -168,7 +172,7 @@
       },
       body: JSON.stringify({
         action: "admin_save_settings",
-        initData: telegram.initData,
+        initData: adminInitData,
         settings: {
           event_start: document.getElementById("startDate").value,
           event_end: document.getElementById("endDate").value,
