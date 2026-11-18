@@ -736,10 +736,9 @@ background-attachment: fixed;
 
   </section>
 
-  <p class="note">
-    Демонстрация анимации — призы пока не разыгрываются.<br>
-    WJX 11.11 — подарки уже близко!
-  </p>
+  <p class="note" id="eventScheduleNote">
+  🎁 РОЗЫГРЫШ WJX НАЧНЁТСЯ С 22.11.2026 ПО 28.11.2026 🎁
+</p>
 </main>
 
 <script>
@@ -807,6 +806,14 @@ eventStart = result.settings.event_start;
 eventEnd = result.settings.event_end;
 eventStartTime = result.settings.start_time.slice(0, 5);
 eventEndTime = result.settings.end_time.slice(0, 5);
+     const scheduleNote = document.getElementById("eventScheduleNote");
+
+if (scheduleNote) {
+  const formatDate = (date) => date.split("-").reverse().join(".");
+
+  scheduleNote.textContent =
+    `🎁 РОЗЫГРЫШ WJX НАЧНЁТСЯ С ${formatDate(eventStart)} ПО ${formatDate(eventEnd)} 🎁`;
+}
       updatePrizeHistory();
     }
   } catch (error) {
