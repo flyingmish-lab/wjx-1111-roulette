@@ -110,7 +110,18 @@
         <input id="testMode" type="checkbox">
       </div>
     </div>
-    
+
+<div
+  id="prizeChancesEditor"
+  style="margin-bottom:20px; text-align:left;"
+>
+  <h3>🎯 Настройка вероятностей призов</h3>
+  <div id="prizeChancesFields"></div>
+  <p id="prizeChancesTotal">Итого: —</p>
+  <button id="savePrizeChancesButton" type="button">
+    💾 Сохранить вероятности
+  </button>
+</div>
 <button
   id="viewPrizesButton"
   type="button"
@@ -207,6 +218,56 @@
     });
 
     const result = await response.json();
+    if (response.ok && result.success) {
+  window.currentPrizeChances = result.prizes.map((item) => ({
+    prize: item.prize,
+    chance: Number(item.chance)
+  }));
+}
+    const fields = document.getElementById("prizeChancesFields");
+fields.textContent = "";
+
+for (const item of window.currentPrizeChances ?? []) {
+  const label = document.createElement("label");
+  label.textContent = item.prize + ": ";
+  label.style.display = "block";
+  label.style.marginBottom = "10px";
+
+  const input = document.createElement("input");
+  input.type = "number";
+  input.min = "0";
+  input.max = "100";
+  input.step = "0.01";
+  input.value = item.chance;
+  input.dataset.prize = item.prize;
+  input.className = "prizeChanceInput";
+  input.style.width = "80px";
+
+  label.appendChild(input);
+  label.append(" %");
+  fields.appendChild(label);
+}
+  function updatePrizeChancesTotal() {
+  const inputs = document.querySelectorAll(".prizeChanceInput");
+
+  let total = 0;
+
+  for (const input of inputs) {
+    total += Number(input.value) || 0;
+  }
+
+  const totalElement = document.getElementById("prizeChancesTotal");
+  totalElement.textContent = `Итого: ${total.toFixed(2)}%`;
+
+  totalElement.style.color =
+    Math.abs(total - 100) < 0.001 ? "green" : "red";
+}
+
+document.querySelectorAll(".prizeChanceInput").forEach((input) => {
+  input.addEventListener("input", updatePrizeChancesTotal);
+});
+
+updatePrizeChancesTotal();
 
     if (!response.ok || !result.success) {
       throw new Error(result.error || "Ошибка загрузки призов");
@@ -304,7 +365,54 @@ for (const spin of result.history ?? []) {
     button.disabled = false;
   }
 }
+document.getElementById("savePrizeChancesButton").addEventListener("click", async () => {
+  const inputs = document.querySelectorAll(".prizeChanceInput");
 
+  const prizes = Array.from(inputs).map((input) => ({
+    prize: input.dataset.prize,
+    chance: Number(input.value)
+  }));
+
+  const total = prizes.reduce((sum, item) => sum + item.chance, 0);
+
+  if (
+  inputs.length !== 6 ||
+  Array.from(inputs).some((input) => input.value.trim() === "") ||
+  prizes.some((item) =>
+    !Number.isFinite(item.chance) ||
+    item.chance < 0 ||
+    item.chance > 100
+  ) ||
+  Math.abs(total - 100) > 0.001
+) {
+    alert("❌ Сумма вероятностей должна быть ровно 100%!");
+    return;
+  }
+
+    try {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        action: "admin_save_prize_chances",
+        initData: adminInitData,
+        prizes: prizes
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || "Не удалось сохранить вероятности");
+    }
+
+    alert("✅ Вероятности успешно сохранены!");
+  } catch (error) {
+    alert("❌ " + error.message);
+  }
+});
 document.getElementById("saveButton").addEventListener("click", saveSettings);
 document.getElementById("resetTestSpinsButton").addEventListener("click", resetTestSpins);
 document.getElementById("viewPrizesButton").addEventListener("click", async () => {
@@ -320,7 +428,8 @@ document.getElementById("viewPrizesButton").addEventListener("click", async () =
   historyPanel.style.display = "none";
 }
 });
-    loadSettings();
+loadSettings();
+loadPrizes();
 </script> 
   
 </body>
