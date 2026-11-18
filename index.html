@@ -811,8 +811,19 @@ eventEndTime = result.settings.end_time.slice(0, 5);
 if (scheduleNote) {
   const formatDate = (date) => date.split("-").reverse().join(".");
 
+  const todayMoscow = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Moscow",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit"
+}).format(new Date());
+
+if (todayMoscow > eventEnd) {
+  scheduleNote.textContent = "🏁 РОЗЫГРЫШ WJX ОКОНЧЕН 🏁";
+} else {
   scheduleNote.textContent =
     `🎁 РОЗЫГРЫШ WJX НАЧНЁТСЯ С ${formatDate(eventStart)} ПО ${formatDate(eventEnd)} 🎁`;
+}
 }
       updatePrizeHistory();
     }
