@@ -122,6 +122,10 @@
   id="prizesPanel"
   style="display:none; margin-bottom:20px; text-align:left;"
 ></div>
+    <div
+  id="winsHistory"
+  style="display:none; margin-bottom:20px; text-align:left;"
+></div>
     <button
   id="resetTestSpinsButton"
   type="button"
@@ -209,7 +213,24 @@
     }
 
     panel.textContent = "";
+const historyPanel = document.getElementById("winsHistory");
+historyPanel.textContent = "";
+const historyTitle = document.createElement("h3");
+historyTitle.textContent = "📋 История последних 50 прокруток";
+historyPanel.appendChild(historyTitle);
 
+for (const spin of result.history ?? []) {
+  const line = document.createElement("p");
+
+  const name = spin.username
+    ? `@${spin.username}`
+    : spin.first_name;
+
+  line.textContent =
+    `👤 ${name} | 📅 ${spin.spin_date} | 🎁 ${spin.prize ?? "Без выигрыша"}`;
+
+  historyPanel.appendChild(line);
+}
     for (const item of result.prizes) {
       const line = document.createElement("p");
       line.textContent =
@@ -288,13 +309,16 @@ document.getElementById("saveButton").addEventListener("click", saveSettings);
 document.getElementById("resetTestSpinsButton").addEventListener("click", resetTestSpins);
 document.getElementById("viewPrizesButton").addEventListener("click", async () => {
   const panel = document.getElementById("prizesPanel");
+  const historyPanel = document.getElementById("winsHistory");
 
   if (panel.style.display === "none") {
-    panel.style.display = "block";
-    await loadPrizes();
-  } else {
-    panel.style.display = "none";
-  }
+  panel.style.display = "block";
+  historyPanel.style.display = "block";
+  await loadPrizes();
+} else {
+  panel.style.display = "none";
+  historyPanel.style.display = "none";
+}
 });
     loadSettings();
 </script> 
