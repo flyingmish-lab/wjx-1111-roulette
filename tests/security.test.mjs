@@ -55,7 +55,7 @@ test('database outages and missing configuration fail closed',async()=>{
 test('every admin API rejects Telegram-only, unsigned, expired and revoked sessions',async()=>{
   const {db,s,roulette}=await setup();
   const owner=await telegramData(221535678);
-  for(const action of ['admin_get_settings','admin_save_settings','admin_get_prizes','admin_save_prize_chances','admin_test_users','admin_set_test_spins']) {
+  for(const action of ['admin_get_settings','admin_save_settings','admin_get_prizes','admin_save_prize_chances','admin_test_users','admin_set_test_spins','admin_get_winners','admin_get_user_wins']) {
     const before=db.calls.length;
     assert.equal((await roulette(request({action,initData:owner}))).status,401);
     assert.equal(db.calls.length,before,'no DB access before authentication');
@@ -135,4 +135,18 @@ test('only browser admin allocates tests; tests cannot spend another user balanc
   assert.equal((await roulette(request({action:'test_spin',initData:player}))).status,429);
   assert.equal(db.calls.some(c=>c.rpc==='wjx_save_spin'),false);
   assert.equal((await roulette(request({action:'spin',initData:player}))).status,403);
+});
+
+test('winner lookup requires admin authorization, validates inputs and binds player summaries to verified identity',async()=>{
+  const {db,s,roulette}=await setup();db.eventWinCount=4;
+  const headers=s.token;
+  assert.equal((await roulette(request({action:'admin_get_winners'},headers))).status,200);
+  const detail=await roulette(request({action:'admin_get_user_wins',telegram_id:'123456789'},headers));
+  assert.equal(detail.status,200);assert.equal((await detail.json()).total_wins,4);
+  for(const telegram_id of [0,-1,'invalid',null]) assert.equal((await roulette(request({action:'admin_get_user_wins',telegram_id},headers))).status,400);
+  for(const values of [{search:'a'.repeat(101)},{offset:-1},{offset:1.5}]) assert.equal((await roulette(request({action:'admin_get_winners',...values},headers))).status,400);
+  const initData=await telegramData(123456789);
+  const status=await roulette(request({action:'status',initData,telegram_id:221535678}));
+  assert.equal(status.status,200);assert.equal((await status.json()).eventWinCount,4);
+  assert.equal(db.calls.filter(c=>c.rpc==='wjx_user_prize_summary').at(-1).args.p_telegram_id,123456789);
 });

@@ -5,6 +5,9 @@ let adminToken = "";
 let expiryTimer;
 let prizeChances = [];
 let testUsersOffset = 0;
+let winnersOffset = 0;
+let winnersRequestVersion = 0;
+let winnerDetailVersion = 0;
 
 function message(text) {
   byId("statusMessage").textContent = text;
@@ -24,6 +27,14 @@ function clearSession(text = "") {
   byId("testUserSearch").value = "";
   byId("testUsersNote").textContent = "";
   testUsersOffset = 0;
+  winnersOffset = 0;
+  winnersRequestVersion += 1;
+  winnerDetailVersion += 1;
+  byId("winnerSearch").value = "";
+  byId("winnersList").replaceChildren();
+  byId("winnersPeriod").textContent = "";
+  byId("winnerDetails").replaceChildren();
+  byId("winnerDetails").hidden = true;
   message(text);
 }
 
@@ -106,7 +117,9 @@ async function loadPrizes() {
   renderChances();
   const panel = byId("prizesPanel");
   panel.replaceChildren();
-  for (const item of result.prizes) {
+  for (
+    const item of result.prizes.filter((item) => isWinningPrize(item.prize))
+  ) {
     const line = document.createElement("p");
     line.textContent =
       `${item.prize} — шанс ${item.chance}% | Выигрышей: ${item.realWins} | Тестовых (без призов): ${item.testWins}`;
@@ -114,13 +127,18 @@ async function loadPrizes() {
   }
   const history = byId("winsHistory");
   const title = document.createElement("h3");
-  title.textContent = "История последних 50 прокруток";
+  title.textContent = "Призы среди последних 50 реальных прокруток";
   history.replaceChildren(title);
-  for (const spin of result.history) {
+  for (
+    const spin of result.history.filter((spin) => isWinningPrize(spin.prize))
+  ) {
     const line = document.createElement("p");
-    line.textContent = `${
-      spin.username ? `@${spin.username}` : spin.first_name
-    } | ${spin.spin_date} | ${spin.prize ?? "Без выигрыша"}`;
+    const name = spin.username
+      ? `@${spin.username}`
+      : spin.first_name || "Участник";
+    if (spin.telegram_id) line.append(winnerButton(spin.telegram_id, name));
+    else line.append(name);
+    line.append(` | ${spin.spin_date} | ${spin.prize}`);
     history.append(line);
   }
 }
@@ -137,7 +155,10 @@ byId("loginForm").addEventListener("submit", async (event) => {
     }, "");
     byId("adminPassword").value = "";
     const result = await pending;
-    if (!Number.isFinite(Date.parse(result.expires_at)) || typeof result.token !== "string" || !result.token) {
+    if (
+      !Number.isFinite(Date.parse(result.expires_at)) ||
+      typeof result.token !== "string" || !result.token
+    ) {
       throw new Error("Некорректный ответ сервера входа");
     }
     // Device wall clocks may differ from the server. This relative timer only
@@ -155,7 +176,12 @@ byId("loginForm").addEventListener("submit", async (event) => {
         timeZone: "Europe/Moscow",
       })
     } МСК`;
-    await Promise.all([loadSettings(), loadPrizes(), loadTestUsers()]);
+    await Promise.all([
+      loadSettings(),
+      loadPrizes(),
+      loadTestUsers(),
+      loadWinners(),
+    ]);
     byId("settingsFields").disabled = false;
     byId("saveButton").disabled = false;
     message("Настройки загружены.");
@@ -332,5 +358,133 @@ byId("setTestAttemptsButton").addEventListener("click", async () => {
     message(error.message);
   } finally {
     button.disabled = byId("testUserSelect").options.length === 0;
+  }
+});
+
+function isWinningPrize(prize) {
+  return typeof prize === "string" && prize.trim() !== "" &&
+    prize.trim() !== "Без выигрыша";
+}
+function winnerButton(id, name) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "winnerUserButton";
+  button.textContent = name;
+  button.dataset.telegramId = id;
+  button.style.cssText =
+    "width:auto;padding:4px 8px;font-size:15px;margin-right:6px";
+  button.addEventListener("click", () => showWinnerDetails(id));
+  return button;
+}
+function periodLabel(period) {
+  const date = (value) => value?.split("-").reverse().join(".") || "—";
+  return `Период: ${date(period?.event_start)} — ${
+    date(period?.event_end)
+  } (МСК)`;
+}
+async function loadWinners() {
+  const version = ++winnersRequestVersion;
+  ++winnerDetailVersion;
+  byId("winnerDetails").hidden = true;
+  byId("winnerDetails").replaceChildren();
+  const result = await adminApi("admin_get_winners", {
+    search: byId("winnerSearch").value.trim().replace(/^@/, ""),
+    offset: winnersOffset,
+  });
+  if (version !== winnersRequestVersion) return;
+  byId("winnersPeriod").textContent = periodLabel(result.period);
+  const list = byId("winnersList");
+  list.replaceChildren();
+  for (const person of result.winners) {
+    const row = document.createElement("p");
+    const name = person.username
+      ? `@${person.username}`
+      : person.first_name || "Участник без ника";
+    row.append(winnerButton(person.telegram_id, name));
+    row.append(
+      `Telegram ID: ${person.telegram_id} | Призов: ${person.total_wins}`,
+    );
+    list.append(row);
+  }
+  if (!result.winners.length) {
+    list.textContent = "Реальных выигрышей за этот период не найдено.";
+  }
+  byId("prevWinnersButton").disabled = winnersOffset === 0;
+  byId("nextWinnersButton").disabled = !result.has_more;
+}
+async function showWinnerDetails(id) {
+  const version = ++winnerDetailVersion;
+  const panel = byId("winnerDetails");
+  panel.hidden = false;
+  panel.textContent = "Загружаем выигрыши участника…";
+  try {
+    const result = await adminApi("admin_get_user_wins", { telegram_id: id });
+    if (version !== winnerDetailVersion) return;
+    panel.replaceChildren();
+    const heading = document.createElement("h3");
+    heading.textContent = result.participant.username
+      ? `@${result.participant.username}`
+      : result.participant.first_name || "Участник без ника";
+    const identity = document.createElement("p");
+    identity.textContent = `Telegram ID: ${result.participant.telegram_id}`;
+    const period = document.createElement("p");
+    period.textContent = periodLabel(result.period);
+    const total = document.createElement("p");
+    total.textContent = `Всего реальных призов: ${result.total_wins}`;
+    panel.append(heading, identity, period, total);
+    for (
+      const item of result.prizes.filter((item) => isWinningPrize(item.prize))
+    ) {
+      const line = document.createElement("p");
+      line.textContent = `${item.prize} × ${item.quantity}`;
+      panel.append(line);
+    }
+    if (!result.total_wins) {
+      const empty = document.createElement("p");
+      empty.textContent = "Реальных выигрышей за этот период нет.";
+      panel.append(empty);
+    } else {
+      const days = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.textContent = "Посмотреть по дням";
+      days.append(summary);
+      for (
+        const item of result.daily.filter((item) => isWinningPrize(item.prize))
+      ) {
+        const line = document.createElement("p");
+        line.textContent = `${
+          item.spin_date.split("-").reverse().join(".")
+        }: ${item.prize} × ${item.quantity}`;
+        days.append(line);
+      }
+      panel.append(days);
+    }
+  } catch (error) {
+    if (version === winnerDetailVersion && adminToken) {
+      panel.textContent = error.message;
+    }
+  }
+}
+async function searchWinners(offset) {
+  winnersOffset = offset;
+  try {
+    await loadWinners();
+  } catch (error) {
+    message(error.message);
+  }
+}
+byId("findWinnersButton").addEventListener("click", () => searchWinners(0));
+byId("prevWinnersButton").addEventListener(
+  "click",
+  () => searchWinners(Math.max(0, winnersOffset - 25)),
+);
+byId("nextWinnersButton").addEventListener(
+  "click",
+  () => searchWinners(winnersOffset + 25),
+);
+byId("winnerSearch").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    searchWinners(0);
   }
 });

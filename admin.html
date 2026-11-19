@@ -116,6 +116,23 @@
         <button id="logoutButton" type="button">Выйти</button>
         <fieldset id="settingsFields" style="border:0; padding:0" disabled>
           <div class="card">
+            <h2>Проверка выигрышей участника</h2>
+            <p>Только реальные призы за даты розыгрыша. Ник — для поиска, Telegram ID — для точной проверки.</p>
+            <p id="winnersPeriod"></p>
+            <label
+              for="winnerSearch">Найти по нику, имени или Telegram ID</label>
+            <input id="winnerSearch" type="search" maxlength="100">
+            <button id="findWinnersButton" type="button">Найти выигрыши</button>
+            <div id="winnersList" style="margin-top:12px"></div>
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <button id="prevWinnersButton" type="button"
+                disabled>Назад</button>
+              <button id="nextWinnersButton" type="button"
+                disabled>Далее</button>
+            </div>
+            <section id="winnerDetails" hidden aria-live="polite"></section>
+          </div>
+          <div class="card">
             <h2>Тестовые попытки пользователей</h2>
             <p>Отдельные попытки без выдачи призов. Реальный дневной лимит не меняется.</p>
             <label
@@ -201,6 +218,6 @@
       </section>
     </main>
 
-    <script src="admin.js?v=20261119-clock-fix" defer></script>
+    <script src="admin.js?v=20261119-winner-lookup" defer></script>
   </body>
 </html>

@@ -7,12 +7,13 @@ async function until(predicate) {
   for(let i=0;i<500;i++) { if(predicate())return; await new Promise(resolve=>setTimeout(resolve,10)); }
   throw Error('Player UI did not settle');
 }
-async function setupPlayer({attempts=1,eventStart='2099-01-01',eventEnd='2099-12-31'}={}) {
-  const db=mockDb();db.balances.set(123456789,attempts);
+async function setupPlayer({attempts=1,eventStart='2099-01-01',eventEnd='2099-12-31',eventWinCount=0,history=[]}={}) {
+  const db=mockDb();db.balances.set(123456789,attempts);db.eventWinCount=eventWinCount;
   db.settings.event_start=eventStart;db.settings.event_end=eventEnd;
   const handler=loadFunction('supabase/functions/wjx-roulette/index.ts',db).handleRoulette;
   const dom=new JSDOM(fs.readFileSync('index.html','utf8'),{url:'https://flyingmish-lab.github.io/wjx-1111-roulette/',runScripts:'outside-only'});
   const w=dom.window,alerts=[],calls=[];
+  if(history.length) w.localStorage.setItem('wjxEventHistory',JSON.stringify(history));
   w.Telegram={WebApp:{initData:await telegramData(123456789),initDataUnsafe:{user:{id:123456789}}}};
   w.console={log(){},error(){}};w.alert=text=>alerts.push(text);
   w.HTMLElement.prototype.animate=()=>({finished:Promise.resolve(),cancel(){}});
@@ -98,4 +99,27 @@ test('flattened dashboard build preserves the configuration guard and authentica
   assert.equal((await auth(req)).status,400);
   const denied=new Request('https://test.invalid',{method:'POST',headers:{'content-type':'application/json'},body:'{"action":"admin_test_users"}'});
   assert.equal((await roulette(denied)).status,401);
+});
+
+test('after the event claim opens only the manager chat for a real server-confirmed winner',async()=>{
+  const {w,el,calls,alerts}=await setupPlayer({attempts:0,eventStart:'2000-01-01',eventEnd:'2001-01-01',eventWinCount:2});
+  const links=[];w.Telegram.WebApp.openTelegramLink=url=>links.push(url);
+  try {
+    assert.equal(w.getComputedStyle(el('claimPrizeButton')).display,'block');
+    const before=calls.length;el('claimPrizeButton').click();
+    assert.deepEqual(links,['https://t.me/Wjx_wjxx']);
+    assert.equal(calls.length,before);assert.equal(alerts.length,0);
+  } finally {w.close();}
+});
+test('local browser prize history cannot enable claiming; tests and active events cannot claim',async()=>{
+  for(const values of [
+    {attempts:0,eventStart:'2000-01-01',eventEnd:'2001-01-01',eventWinCount:0,history:[{date:'2000-01-01',prize:'🎁 Картридж'}]},
+    {attempts:0,eventStart:'2000-01-01',eventWinCount:2},
+    {attempts:1,eventStart:'2000-01-01',eventEnd:'2001-01-01',eventWinCount:2},
+  ]) {
+    const {w,el}=await setupPlayer(values);const links=[];w.Telegram.WebApp.openTelegramLink=url=>links.push(url);
+    try {
+      assert.equal(w.getComputedStyle(el('claimPrizeButton')).display,'none');el('claimPrizeButton').click();assert.equal(links.length,0);
+    } finally {w.close();}
+  }
 });

@@ -732,7 +732,7 @@ background-attachment: fixed;
 </div>
  
    <button id="claimPrizeButton" type="button">
-    Обратиться за призами
+    Забрать приз
   </button>
 </div>
 
@@ -784,10 +784,11 @@ const eventTimeZone = "Europe/Moscow";
 const managerUsername = "Wjx_wjxx";
 const managerUrl = `https://t.me/${managerUsername}`;
 document.getElementById("claimPrizeButton").addEventListener("click", () => {
+  if (getEventStatus() !== "finished" || testLeverMode === true || !serverStatusLoaded || eventWinCount <= 0) return;
   if (window.Telegram?.WebApp?.openTelegramLink) {
     window.Telegram.WebApp.openTelegramLink(managerUrl);
   } else {
-    window.open(managerUrl, "_blank");
+    window.open(managerUrl, "_blank", "noopener,noreferrer");
   }
 });
 const telegramUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
@@ -919,41 +920,10 @@ function showEventFinalScreen() {
   document.querySelector(".reels").style.display = showMachine ? "" : "none";
   document.querySelector(".lever").style.display = showMachine ? "" : "none";
   document.getElementById("bottomCounter").style.display = eventFinished ? "none" : "";
-  if (showMachine) return;
-
-  const finalScreen = document.getElementById("eventFinalScreen");
-  const finalHistory = document.getElementById("eventFinalHistory");
-  const claimButton = document.getElementById("claimPrizeButton");
-
-  finalScreen.style.display = "none";
-  document.getElementById("finishedMessage").style.display = "flex";
-  document.querySelector(".reels").style.display = "none";
-  document.querySelector(".lever").style.display = "none";
-  document.getElementById("bottomCounter").style.display = "none";
-
-
-
- if (weeklyPrizeHistory.length === 0) {
-  finalHistory.textContent = "Это событие уже закончилось";
-  claimButton.style.display = "none";
-  return;
-}
-
-  finalHistory.replaceChildren();
-
-  weeklyPrizeHistory.forEach((entry, index) => {
-    const line = document.createElement("div");
-    line.textContent = `${index + 1}. ${entry.date} — ${entry.prize}`;
-    finalHistory.appendChild(line);
-  });
-
-  const hasPrize = weeklyPrizeHistory.some(
-  entry =>
-    entry.prize.startsWith("🎁 ") &&
-    entry.prize !== "🎁 Без выигрыша"
-);
-
-claimButton.style.display = hasPrize ? "block" : "none";
+  // A browser history or screenshot cannot establish eligibility for a prize.
+  document.getElementById("claimPrizeButton").style.display =
+    !showMachine && serverStatusLoaded && eventWinCount > 0 ? "block" : "none";
+  document.getElementById("eventFinalScreen").style.display = "none";
 }
 
 const todayKey = getMoscowDate();
@@ -1005,6 +975,7 @@ for (let i = 0; i < 3; i++) {
 updatePrizeHistory();
  
 let serverStatusLoaded = false;
+let eventWinCount = 0;
 let testRemaining = 0;
 let testLeverMode = null;
 const testSpinButton = document.getElementById("testSpinButton");
@@ -1026,6 +997,7 @@ async function loadServerStatus() {
 const status = await requestServerStatus();
 
 spinsToday = status.spinsUsed;
+eventWinCount = Number(status.eventWinCount) || 0;
 testRemaining = status.testRemaining ?? 0;
 updateTestBalance();
 prizeHistory = prizeHistory.slice(-spinsToday);
@@ -1040,6 +1012,8 @@ serverStatusLoaded = true;
     console.error("Could not load server status:", error);
   }
 }
+
+setInterval(showEventFinalScreen, 30000);
 
 loadServerStatus().then(async () => {
   await loadRouletteSettings();
@@ -1245,6 +1219,7 @@ try {
     updateTestBalance();
   } else {
     spinsToday = serverSpin.spinNumber;
+    if (serverSpin.prize) eventWinCount += 1;
     updatePrizeHistory();
   }
 

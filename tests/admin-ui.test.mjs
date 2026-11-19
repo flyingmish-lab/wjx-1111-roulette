@@ -117,3 +117,27 @@ test('valid server sessions are accepted when device time is ahead or behind',as
     } finally {ui.dom.window.close();}
   }
 });
+
+test('winner nickname opens server totals for the event and skips empty outcomes',async()=>{
+  const ui=setup();ui.db.eventWinCount=3;
+  const originalRpc=ui.db.rpc;
+  ui.db.rpc=async(name,args)=>name==='wjx_admin_prize_stats'?{data:{prizes:[],history:[
+    {telegram_id:'123456789',username:'player',spin_date:'2026-11-27',prize:'Картридж'},
+    {telegram_id:'123456789',username:'player',spin_date:'2026-11-28',prize:'Без выигрыша'},
+    {telegram_id:'123456789',username:'player',spin_date:'2026-11-28',prize:null},
+  ]}}:originalRpc(name,args);
+  try {
+    await ui.login();
+    assert.equal(ui.el('settingsFields').disabled,false);
+    const nickname=ui.el('winnersList').querySelector('button');
+    assert.equal(nickname.textContent,'@player');nickname.click();
+    await until(()=>ui.el('winnerDetails').textContent.includes('Всего реальных призов: 3'));
+    assert.match(ui.el('winnerDetails').textContent,/Картридж × 3/);
+    assert.equal(ui.el('winnerDetails').textContent.includes('Без выигрыша'),false);
+    assert.equal(ui.el('winsHistory').querySelectorAll('p').length,1);
+    assert.equal(ui.el('winsHistory').textContent.includes('Без выигрыша'),false);
+    ui.el('winnerSearch').value='@player';ui.click('findWinnersButton');
+    await until(()=>ui.calls.some(c=>c.body.action==='admin_get_winners'&&c.body.search==='player'));
+    assert.equal(ui.calls.some(c=>c.body.action==='admin_get_user_wins'&&c.body.telegram_id==='123456789'),true);
+  } finally {ui.dom.window.close();}
+});

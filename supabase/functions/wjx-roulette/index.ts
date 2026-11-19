@@ -129,6 +129,8 @@ async function roulette(req: Request): Promise<Response> {
   const requestData = await readBody(req);
   const action = requestData.action || "register";
   const adminActions = [
+    "admin_get_winners",
+    "admin_get_user_wins",
     "admin_test_users",
     "admin_set_test_spins",
     "admin_get_settings",
@@ -314,6 +316,37 @@ async function roulette(req: Request): Promise<Response> {
         headers: corsHeaders,
       },
     );
+  }
+
+  if (action === "admin_get_winners") {
+    const search = requestData.search ?? "";
+    const offset = requestData.offset ?? 0;
+    if (
+      typeof search !== "string" || search.length > 100 ||
+      !Number.isInteger(offset) || offset < 0 || offset > 1000000
+    ) {
+      return json({ success: false, error: "Некорректный поиск" }, 400);
+    }
+    const { data, error } = await supabase.rpc("wjx_event_winners", {
+      p_search: search.trim(),
+      p_offset: offset,
+    });
+    if (error || !data) throw new Error("Winners unavailable");
+    return json({ success: true, ...data });
+  }
+  if (action === "admin_get_user_wins") {
+    const id = Number(requestData.telegram_id);
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      return json({ success: false, error: "Некорректный Telegram ID" }, 400);
+    }
+    const { data, error } = await supabase.rpc("wjx_user_prize_summary", {
+      p_telegram_id: id,
+    });
+    if (error) throw new Error("Winner summary unavailable");
+    if (!data) {
+      return json({ success: false, error: "Участник не найден" }, 404);
+    }
+    return json({ success: true, ...data });
   }
 
   if (action === "admin_test_users") {
@@ -553,6 +586,13 @@ async function roulette(req: Request): Promise<Response> {
     }
 
     const spinsUsed = count ?? 0;
+    const { data: eventSummary, error: summaryError } = await supabase.rpc(
+      "wjx_user_prize_summary",
+      { p_telegram_id: telegramUserId },
+    );
+    if (summaryError || !eventSummary) {
+      throw new Error("Participant prizes unavailable");
+    }
     const { data: balance, error: balanceError } = await supabase.from(
       "wjx_test_balances",
     )
@@ -562,6 +602,7 @@ async function roulette(req: Request): Promise<Response> {
     return Response.json(
       {
         success: true,
+        eventWinCount: Number(eventSummary.total_wins ?? 0),
         testRemaining: balance?.remaining ?? 0,
         spinsUsed: spinsUsed,
         spinsRemaining: Math.max(0, rouletteSettings.daily_spins - spinsUsed),

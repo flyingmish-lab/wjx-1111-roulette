@@ -10,10 +10,12 @@ export const baseSettings = { event_start: '2000-01-01', event_end: '2099-12-31'
 export const prizes = ['Картридж', 'Расходники', 'Noir Blade', 'Soul Ink', 'Бандажка', 'Без выигрыша'].map((prize, i) => ({prize, chance: i === 5 ? 50 : 10}));
 
 export function mockDb() {
-  const db = { sessions: new Map(), balances: new Map(), calls: [], attempts: 0, settings: {...baseSettings}, failLimiter: false, failSessions: false,
+  const db = { sessions: new Map(), balances: new Map(), eventWinCount: 0, calls: [], attempts: 0, settings: {...baseSettings}, failLimiter: false, failSessions: false,
     async rpc(name, args) {
       db.calls.push({ rpc: name, args });
       if (name === 'wjx_consume_admin_login_attempt') return db.failLimiter ? {error:{code:'db_error'}} : { data:[{allowed: ++db.attempts <= 10, retry_after:900}] };
+      if (name === 'wjx_event_winners') return {data:{period:db.settings,winners:[{telegram_id:'123456789',first_name:'Player',username:'player',total_wins:3}],has_more:false}};
+      if (name === 'wjx_user_prize_summary') return {data:{participant:{telegram_id:String(args.p_telegram_id),username:'player',first_name:'Player'},period:db.settings,total_wins:db.eventWinCount,prizes:db.eventWinCount?[{prize:'Картридж',quantity:db.eventWinCount}]:[],daily:db.eventWinCount?[{spin_date:'2026-11-27',prize:'Картридж',quantity:db.eventWinCount}]:[]}};
       if (name === 'wjx_admin_test_users') return {data:{users:[{telegram_id:'123456789',first_name:'Player',username:'player',test_remaining:db.balances.get(123456789)??0}],has_more:false}};
       if (name === 'wjx_set_test_spins') {db.balances.set(args.p_telegram_id,args.p_attempts);return {data:args.p_attempts};}
       if (name === 'wjx_use_test_spin') {

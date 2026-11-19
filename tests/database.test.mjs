@@ -108,3 +108,45 @@ test('dashboard release validates preservation without creating a counts table',
     assert.equal((await db.query('select count(*)::int as n from wjx_test_spins')).rows[0].n,1);
   } finally {await db.close();}
 });
+
+test('winner reports aggregate only real prizes over all configured event days, without API row truncation',async()=>{
+  const db=new PGlite();try {
+    await db.exec(fixture);
+    for(const name of fs.readdirSync('supabase/migrations').filter(n=>n.endsWith('.sql')).sort())
+      await db.exec(fs.readFileSync('supabase/migrations/'+name,'utf8'));
+    for(const role of ['anon','authenticated']) for(const fn of ['wjx_event_winners(text,integer)','wjx_user_prize_summary(bigint)'])
+      assert.equal((await db.query("select has_function_privilege($1,$2,'EXECUTE') as allowed",[role,fn])).rows[0].allowed,false);
+    await db.exec(`
+      update roulette_settings set event_start='2026-11-27',event_end='2026-11-29';
+      update wjx_participants set username='owner_name' where telegram_id=221535678;
+      update wjx_participants set username='ownerXname' where telegram_id=382749857;
+      update wjx_participants set username='player' where telegram_id=123456789;
+      insert into wjx_spins(telegram_id,spin_date,spin_number,prize) values
+        (221535678,'2026-11-26',1,'Noir Blade'),
+        (221535678,'2026-11-27',1,'Noir Blade'),(221535678,'2026-11-27',2,'Noir Blade'),
+        (221535678,'2026-11-28',1,'Картридж'),(221535678,'2026-11-29',1,'Noir Blade'),
+        (221535678,'2026-11-30',1,'Картридж'),
+        (221535678,'2026-11-27',3,'Без выигрыша'),(221535678,'2026-11-28',2,''),
+        (221535678,'2026-11-29',2,' Без выигрыша '),
+        (382749857,'2026-11-27',1,'Картридж');
+      insert into wjx_test_spins(telegram_id,spin_date,spin_number,prize) values (221535678,'2026-11-27',1,'Noir Blade');
+      insert into wjx_spins(telegram_id,spin_date,spin_number,prize) select 123456789,'2026-11-28',1,'Бандажка' from generate_series(1,1310);
+      set role service_role;
+    `);
+    const summary=(await db.query('select wjx_user_prize_summary(221535678) as report')).rows[0].report;
+    assert.equal(summary.total_wins,4);
+    assert.deepEqual(summary.prizes,[{prize:'Noir Blade',quantity:3},{prize:'Картридж',quantity:1}]);
+    assert.equal(summary.daily.length,3);assert.equal(summary.period.event_start,'2026-11-27');
+    assert.equal((await db.query('select wjx_user_prize_summary(123456789) as report')).rows[0].report.total_wins,1310);
+    const result=(await db.query("select wjx_event_winners('@OWNER_name',0) as report")).rows[0].report;
+    assert.equal(result.winners.length,1);assert.equal(result.winners[0].telegram_id,'221535678');assert.equal(result.winners[0].total_wins,4);
+    assert.equal((await db.query("select wjx_event_winners('%',0) as report")).rows[0].report.winners.length,0);
+    await db.exec("update wjx_participants set username='owner_name' where telegram_id=382749857");
+    assert.equal((await db.query("select wjx_event_winners('owner_name',0) as report")).rows[0].report.winners.length,2);
+    assert.equal((await db.query('select wjx_user_prize_summary(999) as report')).rows[0].report,null);
+    await db.exec("insert into wjx_participants(telegram_id,username) values (999,'empty'); insert into wjx_spins(telegram_id,spin_date,spin_number,prize) values (999,'2026-11-28',1,'Без выигрыша')");
+    const empty=(await db.query('select wjx_user_prize_summary(999) as report')).rows[0].report;
+    assert.equal(empty.total_wins,0);assert.deepEqual(empty.prizes,[]);assert.deepEqual(empty.daily,[]);
+    assert.equal((await db.query("select wjx_event_winners('empty',0) as report")).rows[0].report.winners.length,0);
+  } finally {await db.close();}
+});
