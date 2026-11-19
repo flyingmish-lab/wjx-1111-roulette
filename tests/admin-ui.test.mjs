@@ -9,13 +9,17 @@ async function until(predicate) {
   for(let i=0;i<500;i++) {if(predicate()) return; await new Promise(resolve=>setTimeout(resolve,10));}
   throw Error('UI did not settle');
 }
-function setup() {
+function setup({clockOffset=0}={}) {
   const db=mockDb();
   const auth=loadFunction('supabase/functions/wjx-admin-auth/index.ts',db).handleAdminAuth;
   const roulette=loadFunction('supabase/functions/wjx-roulette/index.ts',db).handleRoulette;
   const dom=new JSDOM(html,{url:'https://flyingmish-lab.github.io/wjx-1111-roulette/admin.html',runScripts:'outside-only'});
-  const w=dom.window; const calls=[];let expire;
-  w.setTimeout=(fn)=>{expire=fn;return 1;};
+  const w=dom.window; const calls=[];let expire,expiryDelay;
+  w.Date=class DeviceDate extends Date {
+    constructor(...args) {super(...(args.length?args:[Date.now()+clockOffset]));}
+    static now() {return Date.now()+clockOffset;}
+  };
+  w.setTimeout=(fn,delay)=>{expire=fn;expiryDelay=delay;return 1;};
   w.fetch=async(url,options)=>{
     const body=JSON.parse(options.body); calls.push({url,body,headers:options.headers});
     const req=new Request(url,options);
@@ -31,7 +35,7 @@ function setup() {
     assert.equal(el('adminPassword').value,'');
     await until(()=>!el('loginButton').disabled);
   }
-  return {db,dom,w,el,click,calls,login,expire:()=>expire()};
+  return {db,dom,w,el,click,calls,login,expire:()=>expire(),expiryDelay:()=>expiryDelay};
 }
 
 test('browser login, settings, statistics, prize chances and logout work without Telegram',async()=>{
@@ -100,4 +104,16 @@ test('admin selects an existing user and sets or revokes a test balance',async()
     assert.equal(ui.db.balances.get(123456789),0);
     assert.equal(ui.db.settings.daily_spins,3);
   } finally {ui.dom.window.close();}
+});
+
+test('valid server sessions are accepted when device time is ahead or behind',async()=>{
+  for(const clockOffset of [-86400000,-300000,300000,86400000]) {
+    const ui=setup({clockOffset});try {
+      await ui.login();
+      assert.equal(ui.el('adminContent').hidden,false,`clock offset ${clockOffset}`);
+      assert.equal(ui.el('settingsFields').disabled,false);
+      assert.equal(ui.expiryDelay(),3600000);
+      assert.equal(ui.el('statusMessage').textContent,'Настройки загружены.');
+    } finally {ui.dom.window.close();}
+  }
 });

@@ -137,12 +137,12 @@ byId("loginForm").addEventListener("submit", async (event) => {
     }, "");
     byId("adminPassword").value = "";
     const result = await pending;
-    const remaining = Date.parse(result.expires_at) - Date.now();
-    if (remaining <= 0 || remaining > 3600000) {
-      throw new Error(
-        "Сессия истекла. Проверьте часы устройства и войдите снова.",
-      );
+    if (!Number.isFinite(Date.parse(result.expires_at)) || typeof result.token !== "string" || !result.token) {
+      throw new Error("Некорректный ответ сервера входа");
     }
+    // Device wall clocks may differ from the server. This relative timer only
+    // clears the UI; the server verifies the signed expiry on every API call.
+    const remaining = 60 * 60 * 1000;
     adminToken = result.token;
     expiryTimer = setTimeout(
       () => clearSession("Сессия истекла. Войдите снова."),
