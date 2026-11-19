@@ -334,6 +334,12 @@ background-attachment: fixed;
   display: none;
 }
 
+/* The original game uses the lever; the separate test button must stay visible. */
+#testSpinButton {
+  display: block;
+  margin-top: 12px;
+}
+
 .lever {
   right: -8cqw;
   top: 77cqw;
@@ -677,6 +683,7 @@ background-attachment: fixed;
 <div id="finishedMessage" style="display: none;">
   РОЗЫГРЫШ ОКОНЧЕН!
 </div>
+<p id="playModeNote" hidden style="padding:10px;background:#fff4d5;color:#5a321e;border-radius:10px;text-align:center;font-weight:bold" role="status">🧪 ТЕСТОВЫЙ РЕЖИМ — БЕЗ ВЫДАЧИ ПРИЗОВ</p>
 <div class="reels">
   <div class="reel"><div class="reel-strip"></div></div>
   <div class="reel"><div class="reel-strip"></div></div>
@@ -734,6 +741,9 @@ background-attachment: fixed;
   <section id="testPlayPanel" hidden style="margin:16px;padding:16px;background:#fff4d5;border-radius:12px">
   <strong>Тестирование — без выдачи призов</strong>
   <p id="testBalanceNote"></p>
+  <label for="testModeToggle" style="display:block;margin-bottom:12px">
+    <input id="testModeToggle" type="checkbox"> Тестовый режим рычага — без выдачи призов
+  </label>
   <button id="testSpinButton" class="spin" type="button">Тестовая прокрутка</button>
   <p id="testSpinResult" role="status"></p>
 </section>
@@ -904,7 +914,12 @@ function getEventStatus() {
 function showEventFinalScreen() {
   const eventFinished = getEventStatus() === "finished";
 
-  if (!eventFinished) return;
+  const showMachine = testLeverMode === true || !eventFinished;
+  document.getElementById("finishedMessage").style.display = showMachine ? "none" : "flex";
+  document.querySelector(".reels").style.display = showMachine ? "" : "none";
+  document.querySelector(".lever").style.display = showMachine ? "" : "none";
+  document.getElementById("bottomCounter").style.display = eventFinished ? "none" : "";
+  if (showMachine) return;
 
   const finalScreen = document.getElementById("eventFinalScreen");
   const finalHistory = document.getElementById("eventFinalHistory");
@@ -991,9 +1006,15 @@ updatePrizeHistory();
  
 let serverStatusLoaded = false;
 let testRemaining = 0;
+let testLeverMode = null;
 const testSpinButton = document.getElementById("testSpinButton");
 function updateTestBalance() {
-  document.getElementById("testPlayPanel").hidden = testRemaining <= 0 && !document.getElementById("testSpinResult").textContent;
+  if (testLeverMode === null && testRemaining > 0) testLeverMode = true;
+  document.getElementById("testPlayPanel").hidden = testRemaining <= 0 && testLeverMode === null && !document.getElementById("testSpinResult").textContent;
+  document.getElementById("testModeToggle").checked = testLeverMode === true;
+  document.getElementById("testModeToggle").disabled = spinning;
+  document.getElementById("playModeNote").hidden = testLeverMode !== true;
+  lever.setAttribute("aria-label", testLeverMode === true ? "Тестовая прокрутка рычагом — без выдачи призов" : "Потянуть рычаг");
   document.getElementById("testBalanceNote").textContent = `Осталось тестовых попыток: ${testRemaining}. Они не расходуют реальные попытки.`;
   testSpinButton.disabled = spinning || testRemaining <= 0;
 }
@@ -1182,7 +1203,11 @@ if (!isTest && eventStatus !== "active") {
 }
 
     
-if (spinning || !serverStatusLoaded || (isTest && testRemaining <= 0)) {
+if (isTest && testRemaining <= 0) {
+  document.getElementById("testSpinResult").textContent = "Тестовые попытки закончились. Для реальной игры выключите тестовый режим рычага.";
+  return;
+}
+if (spinning || !serverStatusLoaded) {
   return;
 }
 
@@ -1288,7 +1313,17 @@ showEventFinalScreen();
     }
   }
   button.addEventListener("click", () => playSpin(false));
-  testSpinButton.addEventListener("click", () => playSpin(true));
+  testSpinButton.addEventListener("click", () => {
+    testLeverMode = true;
+    updateTestBalance();
+    showEventFinalScreen();
+    playSpin(true);
+  });
+  document.getElementById("testModeToggle").addEventListener("change", event => {
+    testLeverMode = event.target.checked;
+    updateTestBalance();
+    showEventFinalScreen();
+  });
  
 lever.addEventListener("click", () => {
   if (spinning || lever.classList.contains("pulling")) return;
@@ -1297,8 +1332,9 @@ lever.addEventListener("click", () => {
   void lever.offsetWidth;
   lever.classList.add("pulling");
 
+  const useTestAttempts = testLeverMode === true;
   setTimeout(() => {
-    button.click();
+    playSpin(useTestAttempts);
   }, 800);
 });
 
