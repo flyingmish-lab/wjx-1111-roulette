@@ -1,0 +1,28 @@
+{
+  "name": "wjx-1111-roulette",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "test": "node scripts/build-dashboard.mjs && node --test tests/*.test.mjs",
+    "check": "deno check supabase/functions/wjx-admin-auth/index.ts supabase/functions/wjx-roulette/index.ts supabase/functions/rapid-action/index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/flyingmish-lab/wjx-1111-roulette.git"
+  },
+  "keywords": [],
+  "author": "",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/flyingmish-lab/wjx-1111-roulette/issues"
+  },
+  "homepage": "https://github.com/flyingmish-lab/wjx-1111-roulette#readme",
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.17",
+    "@supabase/supabase-js": "^2.119.2",
+    "deno": "^2.9.6",
+    "jsdom": "^31.0.1",
+    "typescript": "^5.9.3"
+  },
+  "private": true
+}

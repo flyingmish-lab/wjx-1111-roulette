@@ -1,12 +1,23 @@
-
 <!DOCTYPE html>
 <html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>WJX — Админ-панель</title>
-  <style>
-    * { box-sizing: border-box; }
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="no-referrer">
+    <meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src https://xfslymkzlzfsrzaoerpn.supabase.co; img-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+    <title>WJX — Админ-панель</title>
+    <style>
+    [hidden] {
+      display: none !important;
+    }
+    button:disabled {
+      opacity: .55;
+      cursor: wait;
+    }
+    * {
+      box-sizing: border-box;
+    }
 
     body {
       margin: 0;
@@ -35,7 +46,9 @@
       box-shadow: 0 3px 12px #00000012;
     }
 
-    h2 { font-size: 18px; }
+    h2 {
+      font-size: 18px;
+    }
 
     label {
       display: block;
@@ -58,7 +71,10 @@
       gap: 12px;
     }
 
-    .toggle input { width: 24px; height: 24px; }
+    .toggle input {
+      width: 24px;
+      height: 24px;
+    }
 
     button {
       width: 100%;
@@ -77,360 +93,114 @@
       font-size: 13px;
       text-align: center;
     }
-  </style>
-</head>
+    </style>
+  </head>
 
-<body>
-  <main class="panel">
-    <h1>⚙️ WJX Админ-панель</h1>
+  <body>
+    <main class="panel">
+      <h1>⚙️ WJX Админ-панель</h1>
 
-    <div class="card">
-      <h2>📅 Даты розыгрыша</h2>
+      <form id="loginForm" class="card">
+        <h2>Вход в админ-панель</h2>
+        <label for="adminPassword">Общий пароль</label>
+        <input id="adminPassword" type="password"
+          autocomplete="current-password" maxlength="256" required>
+        <button id="loginButton" type="submit"
+          style="margin-top:16px">Войти</button>
+        <p
+          class="note">Сессия действует один час. После обновления страницы потребуется повторный вход.</p>
+      </form>
+      <p id="statusMessage" role="status" aria-live="polite"></p>
+      <section id="adminContent" hidden>
+        <p id="sessionNote" class="note"></p>
+        <button id="logoutButton" type="button">Выйти</button>
+        <fieldset id="settingsFields" style="border:0; padding:0" disabled>
+          <div class="card">
+            <h2>Тестовые попытки пользователей</h2>
+            <p>Отдельные попытки без выдачи призов. Реальный дневной лимит не меняется.</p>
+            <label
+              for="testUserSearch">Найти по имени, username или Telegram ID</label>
+            <input id="testUserSearch" type="search" maxlength="100">
+            <button id="findTestUsersButton"
+              type="button">Найти пользователей</button>
+            <label for="testUserSelect">Пользователь</label>
+            <select id="testUserSelect"
+              style="width:100%;padding:12px"></select>
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <button id="prevTestUsersButton" type="button"
+                disabled>Назад</button>
+              <button id="nextTestUsersButton" type="button"
+                disabled>Далее</button>
+            </div>
+            <label
+              for="testAttempts">Установить остаток тестовых попыток (0 — отключить)</label>
+            <input id="testAttempts" type="number" min="0" max="100" step="1"
+              value="3">
+            <button id="setTestAttemptsButton" type="button"
+              style="margin-top:12px">Сохранить тестовые попытки</button>
+            <p id="testUsersNote" role="status"></p>
+          </div>
+          <div class="card">
+            <h2>📅 Даты розыгрыша</h2>
 
-      <label for="startDate">Дата начала</label>
-      <input id="startDate" type="date" value="2026-11-26">
+            <label for="startDate">Дата начала</label>
+            <input id="startDate" type="date" value="2026-11-26">
 
-      <label for="endDate">Дата окончания</label>
-      <input id="endDate" type="date" value="2026-11-28">
-      <label for="startTime">🕙 Время начала (МСК)</label>
-<input id="startTime" type="time" value="10:00">
+            <label for="endDate">Дата окончания</label>
+            <input id="endDate" type="date" value="2026-11-28">
+            <label for="startTime">🕙 Время начала (МСК)</label>
+            <input id="startTime" type="time" value="10:00">
 
-<label for="endTime">🕛 Время окончания (МСК)</label>
-<input id="endTime" type="time" value="23:59">
-    </div>
+            <label for="endTime">🕛 Время окончания (МСК)</label>
+            <input id="endTime" type="time" value="23:59">
+          </div>
 
-    <div class="card">
-      <h2>🎰 Настройки рулетки</h2>
+          <div class="card">
+            <h2>🎰 Настройки рулетки</h2>
 
-      <label for="dailySpins">Прокруток в день</label>
-      <input id="dailySpins" type="number" min="1" max="20" value="3">
+            <label for="dailySpins">Прокруток в день</label>
+            <input id="dailySpins" type="number" min="1" max="20" value="3">
+          </div>
 
-      <div class="toggle">
-        <label for="testMode">🧪 Тестовый режим</label>
-        <input id="testMode" type="checkbox">
-      </div>
-    </div>
-
-<div
-  id="prizeChancesEditor"
-  style="margin-bottom:20px; text-align:left;"
->
-  <h3>🎯 Настройка вероятностей призов</h3>
-  <div id="prizeChancesFields"></div>
-  <p id="prizeChancesTotal">Итого: —</p>
-  <button id="savePrizeChancesButton" type="button">
+          <div
+            id="prizeChancesEditor"
+            style="margin-bottom:20px; text-align:left;"
+          >
+            <h3>🎯 Настройка вероятностей призов</h3>
+            <div id="prizeChancesFields"></div>
+            <p id="prizeChancesTotal">Итого: —</p>
+            <button id="savePrizeChancesButton" type="button">
     💾 Сохранить вероятности
   </button>
-</div>
-<button
-  id="viewPrizesButton"
-  type="button"
-  style="margin-bottom: 15px;"
->
+          </div>
+          <button
+            id="viewPrizesButton"
+            type="button"
+            style="margin-bottom: 15px;"
+          >
   🎁 Призы и выигрыши
-</button>
-  <div
-  id="prizesPanel"
-  style="display:none; margin-bottom:20px; text-align:left;"
-></div>
-    <div
-  id="winsHistory"
-  style="display:none; margin-bottom:20px; text-align:left;"
-></div>
-    <button
-  id="resetTestSpinsButton"
-  type="button"
-  style="margin-bottom: 15px;"
->
-  🔄 Сбросить тестовые прокрутки
-</button>
-    <button id="saveButton" type="button" disabled>
+          </button>
+          <div
+            id="prizesPanel"
+            style="display:none; margin-bottom:20px; text-align:left;"
+          ></div>
+          <div
+            id="winsHistory"
+            style="display:none; margin-bottom:20px; text-align:left;"
+          ></div>
+
+          <button id="saveButton" type="button" disabled>
       💾 Сохранить настройки
     </button>
 
-<p class="note">
+          <p class="note">
   ⚙️ Настройки сохраняются в Supabase.
-  Управление доступно только администратору через Telegram.
-</p>
-  </main>
+  Вход по общему паролю. Даты и время указаны по Москве.
+          </p>
+        </fieldset>
+      </section>
+    </main>
 
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script>
-  const telegram = window.Telegram?.WebApp;
-    const adminInitData =
-  telegram?.initData ||
-  sessionStorage.getItem("wjxAdminInitData") ||
-  "";
-  telegram?.ready();
-
-  const apiUrl = "https://xfslymkzlzfsrzaoerpn.supabase.co/functions/v1/wjx-roulette";
-    async function loadSettings() {
-  if (!adminInitData) {
-    alert("Открой админ-панель через Telegram.");
-    return;
-  }
-
-  try {
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        action: "admin_get_settings",
-        initData: adminInitData
-      })
-    });
-
-    const result = await response.json();
-
-    if (!response.ok || !result.success) {
-      throw new Error(result.error || "Не удалось загрузить настройки");
-    }
-
-    document.getElementById("startDate").value = result.settings.event_start;
-    document.getElementById("endDate").value = result.settings.event_end;
-    document.getElementById("startTime").value =
-  result.settings.start_time || "10:00";
-
-   document.getElementById("endTime").value =
-  result.settings.end_time || "23:59";
-    document.getElementById("dailySpins").value = result.settings.daily_spins;
-    document.getElementById("testMode").checked = result.settings.test_mode;
-
-    document.getElementById("saveButton").disabled = false;
-  } catch (error) {
-    alert("Ошибка: " + error.message);
-  }
-}
-    async function loadPrizes() {
-  const panel = document.getElementById("prizesPanel");
-  panel.textContent = "⏳ Загружаем призы...";
-
-  try {
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "admin_get_prizes",
-        initData: adminInitData
-      })
-    });
-
-    const result = await response.json();
-    if (response.ok && result.success) {
-  window.currentPrizeChances = result.prizes.map((item) => ({
-    prize: item.prize,
-    chance: Number(item.chance)
-  }));
-}
-    const fields = document.getElementById("prizeChancesFields");
-fields.textContent = "";
-
-for (const item of window.currentPrizeChances ?? []) {
-  const label = document.createElement("label");
-  label.textContent = item.prize + ": ";
-  label.style.display = "block";
-  label.style.marginBottom = "10px";
-
-  const input = document.createElement("input");
-  input.type = "number";
-  input.min = "0";
-  input.max = "100";
-  input.step = "0.01";
-  input.value = item.chance;
-  input.dataset.prize = item.prize;
-  input.className = "prizeChanceInput";
-  input.style.width = "80px";
-
-  label.appendChild(input);
-  label.append(" %");
-  fields.appendChild(label);
-}
-  function updatePrizeChancesTotal() {
-  const inputs = document.querySelectorAll(".prizeChanceInput");
-
-  let total = 0;
-
-  for (const input of inputs) {
-    total += Number(input.value) || 0;
-  }
-
-  const totalElement = document.getElementById("prizeChancesTotal");
-  totalElement.textContent = `Итого: ${total.toFixed(2)}%`;
-
-  totalElement.style.color =
-    Math.abs(total - 100) < 0.001 ? "green" : "red";
-}
-
-document.querySelectorAll(".prizeChanceInput").forEach((input) => {
-  input.addEventListener("input", updatePrizeChancesTotal);
-});
-
-updatePrizeChancesTotal();
-
-    if (!response.ok || !result.success) {
-      throw new Error(result.error || "Ошибка загрузки призов");
-    }
-
-    panel.textContent = "";
-const historyPanel = document.getElementById("winsHistory");
-historyPanel.textContent = "";
-const historyTitle = document.createElement("h3");
-historyTitle.textContent = "📋 История последних 50 прокруток";
-historyPanel.appendChild(historyTitle);
-
-for (const spin of result.history ?? []) {
-  const line = document.createElement("p");
-
-  const name = spin.username
-    ? `@${spin.username}`
-    : spin.first_name;
-
-  line.textContent =
-    `👤 ${name} | 📅 ${spin.spin_date} | 🎁 ${spin.prize ?? "Без выигрыша"}`;
-
-  historyPanel.appendChild(line);
-}
-    for (const item of result.prizes) {
-      const line = document.createElement("p");
-      line.textContent =
-        `${item.prize} — шанс ${item.chance}% | ` +
-        `Выигрышей: ${item.realWins} | ` +
-        `Тестовых: ${item.testWins}`;
-      panel.appendChild(line);
-    }
-  } catch (error) {
-    panel.textContent = "❌ " + error.message;
-  }
-}
-    async function resetTestSpins() {
-  if (!confirm("Сбросить сегодняшние тестовые прокрутки?")) return;
-
-  try {
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "admin_reset_test_spins",
-        initData: adminInitData
-      })
-    });
-
-    const result = await response.json();
-
-    if (!response.ok || !result.success) {
-      throw new Error(result.error || "Ошибка сброса");
-    }
-
-    alert("✅ Тестовые прокрутки сброшены!");
-  } catch (error) {
-    alert("❌ " + error.message);
-  }
-}
-    async function saveSettings() {
-  const button = document.getElementById("saveButton");
-  button.disabled = true;
-
-  try {
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        action: "admin_save_settings",
-        initData: adminInitData,
-        settings: {
-          event_start: document.getElementById("startDate").value,
-          event_end: document.getElementById("endDate").value,
-          start_time: document.getElementById("startTime").value,
-          end_time: document.getElementById("endTime").value,
-          daily_spins: Number(document.getElementById("dailySpins").value),
-          test_mode: document.getElementById("testMode").checked
-        }
-      })
-    });
-
-    const result = await response.json();
-
-    if (!response.ok || !result.success) {
-      throw new Error(result.error || "Не удалось сохранить настройки");
-    }
-
-    alert("✅ Настройки сохранены!");
-  } catch (error) {
-    alert("Ошибка: " + error.message);
-  } finally {
-    button.disabled = false;
-  }
-}
-document.getElementById("savePrizeChancesButton").addEventListener("click", async () => {
-  const inputs = document.querySelectorAll(".prizeChanceInput");
-
-  const prizes = Array.from(inputs).map((input) => ({
-    prize: input.dataset.prize,
-    chance: Number(input.value)
-  }));
-
-  const total = prizes.reduce((sum, item) => sum + item.chance, 0);
-
-  if (
-  inputs.length !== 6 ||
-  Array.from(inputs).some((input) => input.value.trim() === "") ||
-  prizes.some((item) =>
-    !Number.isFinite(item.chance) ||
-    item.chance < 0 ||
-    item.chance > 100
-  ) ||
-  Math.abs(total - 100) > 0.001
-) {
-    alert("❌ Сумма вероятностей должна быть ровно 100%!");
-    return;
-  }
-
-    try {
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        action: "admin_save_prize_chances",
-        initData: adminInitData,
-        prizes: prizes
-      })
-    });
-
-    const result = await response.json();
-
-    if (!response.ok || !result.success) {
-      throw new Error(result.error || "Не удалось сохранить вероятности");
-    }
-
-    alert("✅ Вероятности успешно сохранены!");
-  } catch (error) {
-    alert("❌ " + error.message);
-  }
-});
-document.getElementById("saveButton").addEventListener("click", saveSettings);
-document.getElementById("resetTestSpinsButton").addEventListener("click", resetTestSpins);
-document.getElementById("viewPrizesButton").addEventListener("click", async () => {
-  const panel = document.getElementById("prizesPanel");
-  const historyPanel = document.getElementById("winsHistory");
-
-  if (panel.style.display === "none") {
-  panel.style.display = "block";
-  historyPanel.style.display = "block";
-  await loadPrizes();
-} else {
-  panel.style.display = "none";
-  historyPanel.style.display = "none";
-}
-});
-loadSettings();
-loadPrizes();
-</script> 
-  
-</body>
+    <script src="admin.js" defer></script>
+  </body>
 </html>

@@ -654,11 +654,6 @@ background-attachment: fixed;
 <div class="cloud two"></div>
 
 <main class="app">
- <a id="adminPanelLink"
-   href="admin.html"
-   style="display:none; position:relative; z-index:20; margin-bottom:12px; padding:12px; background:#991b32; color:white; border-radius:12px; text-decoration:none; font-weight:bold;">
-  ⚙️ Админ-панель
-</a>
   <div class="stars">✦ ✧ ✦</div>
   <div class="eyebrow">ПРАЗДНИЧНАЯ АКЦИЯ</div>
 
@@ -736,6 +731,12 @@ background-attachment: fixed;
 
   </section>
 
+  <section id="testPlayPanel" hidden style="margin:16px;padding:16px;background:#fff4d5;border-radius:12px">
+  <strong>Тестирование — без выдачи призов</strong>
+  <p id="testBalanceNote"></p>
+  <button id="testSpinButton" class="spin" type="button">Тестовая прокрутка</button>
+  <p id="testSpinResult" role="status"></p>
+</section>
   <p class="note" id="eventScheduleNote">
   🎁 РОЗЫГРЫШ WJX НАЧНЁТСЯ С 22.11.2026 ПО 28.11.2026 🎁
 </p>
@@ -864,20 +865,6 @@ console.log(
   telegramUserId ? "Пользователь определён" : "Telegram ID недоступен"
 );
 
-const adminTelegramId = 221535678;
-const adminTelegramIds = [221535678, 382749857];
-document.getElementById("adminPanelLink").addEventListener("click", () => {
-  sessionStorage.setItem("wjxAdminInitData", telegramInitData);
-});
-
-if (adminTelegramIds.includes(telegramUserId)) {
-  document.getElementById("adminPanelLink").style.display = "inline-block";
-}
-
-const testMode = adminTelegramIds.includes(telegramUserId);
-
- 
-
 function getMoscowDate() {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: eventTimeZone,
@@ -916,9 +903,8 @@ function getEventStatus() {
 
 function showEventFinalScreen() {
   const eventFinished = getEventStatus() === "finished";
-  const testFinished = testMode && spinsToday >= maxDailySpins;
 
-  if (!eventFinished && !testFinished) return;
+  if (!eventFinished) return;
 
   const finalScreen = document.getElementById("eventFinalScreen");
   const finalHistory = document.getElementById("eventFinalHistory");
@@ -1004,6 +990,13 @@ for (let i = 0; i < 3; i++) {
 updatePrizeHistory();
  
 let serverStatusLoaded = false;
+let testRemaining = 0;
+const testSpinButton = document.getElementById("testSpinButton");
+function updateTestBalance() {
+  document.getElementById("testPlayPanel").hidden = testRemaining <= 0 && !document.getElementById("testSpinResult").textContent;
+  document.getElementById("testBalanceNote").textContent = `Осталось тестовых попыток: ${testRemaining}. Они не расходуют реальные попытки.`;
+  testSpinButton.disabled = spinning || testRemaining <= 0;
+}
  
 async function loadServerStatus() {
   if (!telegramInitData) return;
@@ -1012,6 +1005,8 @@ async function loadServerStatus() {
 const status = await requestServerStatus();
 
 spinsToday = status.spinsUsed;
+testRemaining = status.testRemaining ?? 0;
+updateTestBalance();
 prizeHistory = prizeHistory.slice(-spinsToday);
 
 if (spinsToday === 0) {
@@ -1147,7 +1142,7 @@ async function requestServerStatus() {
 
   return result;
 }
-async function requestServerSpin() {
+async function requestServerSpin(isTest = false) {
   if (!telegramInitData) {
     throw new Error("Открой рулетку через Telegram");
   }
@@ -1159,7 +1154,7 @@ async function requestServerSpin() {
     },
     body: JSON.stringify({
       initData: telegramInitData,
-      action: "spin"
+      action: isTest ? "test_spin" : "spin"
     })
   });
 
@@ -1173,11 +1168,11 @@ async function requestServerSpin() {
 
   return result;
 }
-  button.addEventListener("click", async () => {
+  async function playSpin(isTest = false) {
 const eventStatus = getEventStatus();
 
 
-if (!testMode && eventStatus !== "active") {
+if (!isTest && eventStatus !== "active") {
   alert(
     eventStatus === "before"
       ? `🎰 Розыгрыш начнётся ${eventStart} в ${eventStartTime} МСК! Ждём тебя!`
@@ -1187,19 +1182,24 @@ if (!testMode && eventStatus !== "active") {
 }
 
     
-if (spinning || !serverStatusLoaded) {
+if (spinning || !serverStatusLoaded || (isTest && testRemaining <= 0)) {
   return;
 }
 
 
 spinning = true;
 button.disabled = true;
+testSpinButton.disabled = true;
+if (isTest) {
+  document.querySelector(".reels").style.display = "";
+  document.getElementById("finishedMessage").style.display = "none";
+}
 
 let selectedPrize = null;
 let reelResults = [];
 
 try {
-  const serverSpin = await requestServerSpin();
+  const serverSpin = await requestServerSpin(isTest);
 
   selectedPrize = serverSpin.prize;
 
@@ -1214,14 +1214,22 @@ try {
     ];
   }
 
-  spinsToday = serverSpin.spinNumber;
-  updatePrizeHistory();
+  if (isTest) {
+    if (!serverSpin.isTest) throw new Error("Некорректный ответ тестовой прокрутки");
+    testRemaining = serverSpin.testRemaining;
+    updateTestBalance();
+  } else {
+    spinsToday = serverSpin.spinNumber;
+    updatePrizeHistory();
+  }
 
 } catch (error) {
   console.error("Server spin failed:", error);
 
   spinning = false;
   button.disabled = false;
+  updateTestBalance();
+  if (isTest) await loadServerStatus();
   alert("Не удалось выполнить прокрутку: " + error.message);
   return;
 }
@@ -1245,6 +1253,10 @@ const prizeText = selectedPrize
   ? "🎁 " + selectedPrize
   : "Без выигрыша";
 
+if (isTest) {
+  document.getElementById("testSpinResult").textContent = `Тестовый результат: ${prizeText}. Приз не выдаётся.`;
+  updateTestBalance();
+} else {
 prizeHistory.push(prizeText);
 
 weeklyPrizeHistory.push({
@@ -1265,14 +1277,18 @@ localStorage.setItem("wjxSpins", JSON.stringify({
 }));
 
 updatePrizeHistory();
+}
 showEventFinalScreen();
 
 } finally {
       spinning = false;
       button.disabled = false;
       button.textContent = "🎰 КРУТИТЬ ЕЩЁ";
+      updateTestBalance();
     }
-  });
+  }
+  button.addEventListener("click", () => playSpin(false));
+  testSpinButton.addEventListener("click", () => playSpin(true));
  
 lever.addEventListener("click", () => {
   if (spinning || lever.classList.contains("pulling")) return;

@@ -1,0 +1,11 @@
+project_id = "xfslymkzlzfsrzaoerpn"
+
+# These endpoints use their own Telegram signature / admin session checks.
+[functions.wjx-roulette]
+verify_jwt = false
+
+[functions.wjx-admin-auth]
+verify_jwt = false
+
+[functions.rapid-action]
+verify_jwt = false
