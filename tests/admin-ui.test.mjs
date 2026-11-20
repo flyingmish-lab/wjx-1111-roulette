@@ -9,10 +9,10 @@ async function until(predicate) {
   for(let i=0;i<500;i++) {if(predicate()) return; await new Promise(resolve=>setTimeout(resolve,10));}
   throw Error('UI did not settle');
 }
-function setup({clockOffset=0}={}) {
+function setup({clockOffset=0,telegramFetch}={}) {
   const db=mockDb();
   const auth=loadFunction('supabase/functions/wjx-admin-auth/index.ts',db).handleAdminAuth;
-  const roulette=loadFunction('supabase/functions/wjx-roulette/index.ts',db).handleRoulette;
+  const roulette=loadFunction('supabase/functions/wjx-roulette/index.ts',db,env,telegramFetch?{fetch:telegramFetch}:{}).handleRoulette;
   const dom=new JSDOM(html,{url:'https://flyingmish-lab.github.io/wjx-1111-roulette/admin.html',runScripts:'outside-only'});
   const w=dom.window; const calls=[];let expire,expiryDelay;
   w.Date=class DeviceDate extends Date {
@@ -155,4 +155,22 @@ test('admin marks delivery once and sees updated remaining prizes without changi
     assert.equal(el('winnerDetails').querySelector('button'),null);assert.equal(db.deliveries.get(123456789),3);
     assert.match(el('winnerDetails').textContent,/Всего реальных призов: 3/);
   } finally {w.close();}
+});
+
+
+test('browser admin checks and connects bot commands without displaying credentials',async()=>{
+  const methods=[];
+  const ui=setup({telegramFetch:async(url,options)=>{
+    const method=url.split('/').at(-1);methods.push(method);
+    return Response.json({ok:true,result:method==='getWebhookInfo'?{url:'',pending_update_count:0}:method==='getMe'?{username:'WjxBot'}:true});
+  }});
+  try {
+    await ui.login();ui.click('checkBotButton');await until(()=>!ui.el('checkBotButton').disabled);
+    assert.match(ui.el('botConnectionNote').textContent,/ещё не подключён/);
+    ui.click('configureBotButton');await until(()=>!ui.el('configureBotButton').disabled);
+    assert.match(ui.el('botConnectionNote').textContent,/Команды подключены для @WjxBot/);
+    assert.ok(methods.includes('setWebhook'));
+    assert.equal(ui.w.document.body.textContent.includes(env.TELEGRAM_BOT_TOKEN),false);
+    ui.click('logoutButton');assert.equal(ui.el('botConnectionNote').textContent,'');
+  } finally {ui.w.close();}
 });

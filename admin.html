@@ -114,6 +114,13 @@
       <section id="adminContent" hidden>
         <p id="sessionNote" class="note"></p>
         <button id="logoutButton" type="button">Выйти</button>
+        <div class="card">
+          <h2>Команды Telegram-бота</h2>
+          <p>/start, /play, /prizes, /rules, /help — одинаковые команды для всех пользователей.</p>
+          <p id="botConnectionNote" role="status"></p>
+          <button id="checkBotButton" type="button">Проверить подключение</button>
+          <button id="configureBotButton" type="button" style="margin-top:12px">Подключить команды бота</button>
+        </div>
         <fieldset id="settingsFields" style="border:0; padding:0" disabled>
           <div class="card">
             <h2>Проверка выигрышей участника</h2>
@@ -218,6 +225,6 @@
       </section>
     </main>
 
-    <script src="admin.js?v=20261120-reliability" defer></script>
+    <script src="admin.js?v=20261120-bot-commands" defer></script>
   </body>
 </html>

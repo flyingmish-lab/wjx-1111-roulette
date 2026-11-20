@@ -7,6 +7,10 @@ import {
   readBody,
 } from "../_shared/http.ts";
 import { requireAdmin } from "../_shared/admin-session.ts";
+import {
+  botConnectionStatus,
+  configureTelegramBot,
+} from "../_shared/telegram-bot.ts";
 const telegramBotToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -129,6 +133,8 @@ async function roulette(req: Request): Promise<Response> {
   const requestData = await readBody(req);
   const action = requestData.action || "register";
   const adminActions = [
+    "admin_bot_status",
+    "admin_configure_bot",
     "admin_mark_prizes_delivered",
     "admin_get_winners",
     "admin_get_user_wins",
@@ -162,6 +168,27 @@ async function roulette(req: Request): Promise<Response> {
         401,
       );
     }
+  }
+  if (action === "admin_bot_status") {
+    return json({
+      success: true,
+      ...await botConnectionStatus(telegramBotToken ?? "", supabaseUrl!),
+    });
+  }
+  if (action === "admin_configure_bot") {
+    const result = await configureTelegramBot(
+      telegramBotToken ?? "",
+      Deno.env.get("WJX_ADMIN_SESSION_SECRET") ?? "",
+      supabaseUrl!,
+    );
+    if (result.conflict) {
+      return json({
+        success: false,
+        error:
+          "У бота уже подключён другой обработчик. Автоматическая замена остановлена, чтобы сохранить его функции.",
+      }, 409);
+    }
+    return json({ success: true, ...result });
   }
   let telegramUserId: number = 0;
   if (!isAdminAction) {

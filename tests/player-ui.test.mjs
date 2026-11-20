@@ -196,7 +196,7 @@ test('reliability: timeout leaves the operation pending and online recovery neve
     const originalTimeout=w.setTimeout.bind(w);w.setTimeout=(fn,ms,...args)=>originalTimeout(fn,ms===15000?10:ms,...args);
     w.fetch=async(url,options)=>{
       const body=JSON.parse(options.body);calls.push(body);const response=await handler(new Request(url,{...options,signal:undefined}));
-      if(body.action==='spin')return new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(new w.DOMException('Aborted','AbortError')),{once:true}));
+      if(body.action==='spin'){if(options.signal.aborted)throw new w.DOMException('Aborted','AbortError');return new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(new w.DOMException('Aborted','AbortError')),{once:true}));}
       return response;
     };
   }});

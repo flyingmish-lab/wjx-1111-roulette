@@ -9,3 +9,7 @@ verify_jwt = false
 
 [functions.rapid-action]
 verify_jwt = false
+
+# Telegram authenticates incoming updates with the derived webhook secret.
+[functions.wjx-telegram-bot]
+verify_jwt = false

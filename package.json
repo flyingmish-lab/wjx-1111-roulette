@@ -4,7 +4,7 @@
   "description": "",
   "scripts": {
     "test": "node scripts/build-dashboard.mjs && node --test tests/*.test.mjs",
-    "check": "deno check supabase/functions/wjx-admin-auth/index.ts supabase/functions/wjx-roulette/index.ts supabase/functions/rapid-action/index.ts"
+    "check": "deno check supabase/functions/wjx-admin-auth/index.ts supabase/functions/wjx-roulette/index.ts supabase/functions/rapid-action/index.ts supabase/functions/wjx-telegram-bot/index.ts"
   },
   "repository": {
     "type": "git",

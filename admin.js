@@ -35,6 +35,7 @@ function clearSession(text = "") {
   byId("winnersPeriod").textContent = "";
   byId("winnerDetails").replaceChildren();
   byId("winnerDetails").hidden = true;
+  byId("botConnectionNote").textContent = "";
   message(text);
 }
 
@@ -531,5 +532,40 @@ byId("winnerSearch").addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     event.preventDefault();
     searchWinners(0);
+  }
+});
+
+byId("checkBotButton").addEventListener("click", async () => {
+  const button = byId("checkBotButton");
+  button.disabled = true;
+  try {
+    const result = await adminApi("admin_bot_status");
+    byId("botConnectionNote").textContent = result.otherWebhook
+      ? "У бота подключён другой обработчик. Его замена автоматически заблокирована."
+      : result.connected
+      ? `Команды подключены. Ожидают обработки: ${result.pendingUpdates}.${
+        result.deliveryError
+          ? " Telegram сообщает об ошибке доставки; проверьте функцию бота."
+          : ""
+      }`
+      : "Обработчик команд ещё не подключён.";
+  } catch (error) {
+    message(error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+byId("configureBotButton").addEventListener("click", async () => {
+  const button = byId("configureBotButton");
+  button.disabled = true;
+  try {
+    const result = await adminApi("admin_configure_bot");
+    byId("botConnectionNote").textContent = `Команды подключены${
+      result.username ? " для @" + result.username : ""
+    }. Проверьте их в личном чате с ботом.`;
+  } catch (error) {
+    message(error.message);
+  } finally {
+    button.disabled = false;
   }
 });

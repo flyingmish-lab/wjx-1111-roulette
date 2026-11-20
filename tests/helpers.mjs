@@ -96,7 +96,7 @@ export function mockDb() {
   }; return db;
 }
 
-export function loadFunction(entry, db, environment = env) {
+export function loadFunction(entry, db, environment = env, runtime = {}) {
   const cache = new Map();
   function load(filename) {
     filename=path.resolve(filename);
@@ -106,7 +106,7 @@ export function loadFunction(entry, db, environment = env) {
     const context={ exports, require(specifier) {
       if(specifier.startsWith('npm:')) return {createClient:()=>db};
       return load(path.resolve(path.dirname(filename),specifier));
-    }, Deno:{env:{get:key=>environment[key]},serve(){}}, Request,Response,Headers,TextEncoder,TextDecoder,URLSearchParams,Date,crypto:webcrypto,console };
+    }, Deno:{env:{get:key=>environment[key]},serve(){}}, Request,Response,Headers,TextEncoder,TextDecoder,URL,URLSearchParams,Date,crypto:webcrypto,console,setTimeout,clearTimeout,AbortController,...runtime };
     vm.runInNewContext(code,context,{filename});
     return exports;
   }

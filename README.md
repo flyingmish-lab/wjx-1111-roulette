@@ -13,6 +13,8 @@ Telegram Mini App с рулеткой и отдельной браузерной
 
 Подготовленные исправления сетевых сбоев, восстановление истории и учёт выдачи: [docs/RELIABILITY_RELEASE_REVIEW.md](docs/RELIABILITY_RELEASE_REVIEW.md).
 
+Команды личного чата Telegram-бота и защищённое подключение обработчика: [docs/TELEGRAM_BOT_COMMANDS_REVIEW.md](docs/TELEGRAM_BOT_COMMANDS_REVIEW.md).
+
 ## Проверка разработки
 
 Требуется Node.js 24. Зависимости предназначены для разработки, на GitHub Pages сборка не нужна.

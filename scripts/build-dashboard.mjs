@@ -2,14 +2,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 const sharedHttp=fs.readFileSync('supabase/functions/_shared/http.ts','utf8').replace(/export /g,'');
 const sharedSession=fs.readFileSync('supabase/functions/_shared/admin-session.ts','utf8').replace(/export /g,'').replace(/\bencoder\b/g,'sessionEncoder');
-for(const name of ['wjx-admin-auth','wjx-roulette','rapid-action']) {
+const sharedTelegram=fs.readFileSync('supabase/functions/_shared/telegram-bot.ts','utf8').replace(/export /g,'');
+for(const name of ['wjx-admin-auth','wjx-roulette','rapid-action','wjx-telegram-bot']) {
   let source=fs.readFileSync(`supabase/functions/${name}/index.ts`,'utf8');
   source=source.replace(/import\s+[\s\S]*?from\s+"\.\.\/_shared\/[^\"]+";\n/g, match => {
     // An import block may begin before the npm import; preserve that import.
     const npm=match.match(/import[^;]+from "npm:[^\"]+";\n/);
     return npm?.[0]??'';
   });
-  const result=`// Generated from supabase/functions by scripts/build-dashboard.mjs\n${sharedHttp}\n${name==='rapid-action'?'':sharedSession}\n${source}`;
+  const result=`// Generated from supabase/functions by scripts/build-dashboard.mjs\n${sharedHttp}\n${name==='rapid-action'?'':sharedSession}\n${['wjx-roulette','wjx-telegram-bot'].includes(name)?sharedTelegram:''}\n${source}`;
   fs.mkdirSync(`dashboard-dist/${name}`,{recursive:true});fs.writeFileSync(`dashboard-dist/${name}/index.ts`,result);
 }
 const migrationFiles=fs.readdirSync('supabase/migrations').filter(n=>n.endsWith('.sql')).sort();
