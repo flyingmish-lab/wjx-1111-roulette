@@ -747,290 +747,445 @@ background-attachment: fixed;
   <button id="testSpinButton" class="spin" type="button">Тестовая прокрутка</button>
   <p id="testSpinResult" role="status"></p>
 </section>
+  <section style="margin:16px;padding:16px;background:#fff4d5;border-radius:12px" aria-live="polite">
+    <p id="connectionNote" role="status">Загружаем игру…</p>
+    <button id="retryLoadButton" type="button" hidden>Повторить загрузку</button>
+    <button id="recoverSpinButton" type="button" hidden>Проверить результат</button>
+    <p id="lastSpinResult"></p>
+  </section>
+  <section id="myPrizesPanel" hidden style="margin:16px;padding:16px;background:#fff4d5;border-radius:12px">
+    <h2 style="font-size:18px">Мои призы за розыгрыш</h2>
+    <p id="myPrizesPeriod"></p>
+    <div id="myPrizes"></div>
+  </section>
   <p class="note" id="eventScheduleNote">
-  🎁 РОЗЫГРЫШ WJX НАЧНЁТСЯ С 22.11.2026 ПО 28.11.2026 🎁
+  Загружаем расписание розыгрыша…
 </p>
 </main>
 
 <script>
-  const reels = [...document.querySelectorAll(".reel")];
-  const button = document.getElementById("spinButton");
-  const lever = document.getElementById("leverButton");
-  const symbols = [
+const reels = [...document.querySelectorAll(".reel")];
+const button = document.getElementById("spinButton");
+const lever = document.getElementById("leverButton");
+const testSpinButton = document.getElementById("testSpinButton");
+const byId = (id) => document.getElementById(id);
+const symbols = [
   "приз картридж.webp",
   "расходники.webp",
   "Noir Blade.webp",
   "Soul Ink 1.webp",
-  "бандажка.webp"
+  "бандажка.webp",
 ];
-
- const prizeImages = {
-  "Картридж": "приз картридж.webp",
-  "Расходники": "расходники.webp",
-  "Noir Blade": "Noir Blade.webp",
-  "Soul Ink": "Soul Ink 1.webp",
-  "Бандажка": "бандажка.webp"
+const prizeImages = {
+  "Картридж": symbols[0],
+  "Расходники": symbols[1],
+  "Noir Blade": symbols[2],
+  "Soul Ink": symbols[3],
+  "Бандажка": symbols[4],
 };
-  const animations = [];
-  let spinning = false;
-
-let maxDailySpins = 3;
-
-let eventStart = "2026-11-26";
-let eventEnd = "2026-11-28";
-let eventStartTime = "10:00";
-let eventEndTime = "23:59";
-const eventTimeZone = "Europe/Moscow";
-const managerUsername = "Wjx_wjxx";
-const managerUrl = `https://t.me/${managerUsername}`;
-document.getElementById("claimPrizeButton").addEventListener("click", () => {
-  if (getEventStatus() !== "finished" || testLeverMode === true || !serverStatusLoaded || eventWinCount <= 0) return;
-  if (window.Telegram?.WebApp?.openTelegramLink) {
-    window.Telegram.WebApp.openTelegramLink(managerUrl);
-  } else {
-    window.open(managerUrl, "_blank", "noopener,noreferrer");
-  }
-});
-const telegramUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
-const telegramUserId = telegramUser?.id || null;
 const telegramInitData = window.Telegram?.WebApp?.initData || "";
-const supabaseFunctionUrl = "https://xfslymkzlzfsrzaoerpn.supabase.co/functions/v1/wjx-roulette";
- async function loadRouletteSettings() {
-  if (!telegramInitData) return;
-
+const telegramUserId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+const supabaseFunctionUrl =
+  "https://xfslymkzlzfsrzaoerpn.supabase.co/functions/v1/wjx-roulette";
+const managerUrl = "https://t.me/Wjx_wjxx";
+const pendingKey = `wjxPendingSpin:${telegramUserId || "none"}`;
+let spinning = false;
+let serverStatusLoaded = false;
+let state = null;
+let serverAnchor = 0;
+let performanceAnchor = 0;
+let testLeverMode = null;
+let refreshing = null;
+let pending = readPending();
+function readPending() {
   try {
-    const response = await fetch(supabaseFunctionUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "status",
-        initData: telegramInitData
-      })
-    });
-
-    const result = await response.json();
-
-    if (response.ok && result.success) {
-      maxDailySpins = result.settings.daily_spins;
-eventStart = result.settings.event_start;
-eventEnd = result.settings.event_end;
-eventStartTime = result.settings.start_time.slice(0, 5);
-eventEndTime = result.settings.end_time.slice(0, 5);
-     const scheduleNote = document.getElementById("eventScheduleNote");
-
-if (scheduleNote) {
-  const formatDate = (date) => date.split("-").reverse().join(".");
-
-  const todayMoscow = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "Europe/Moscow",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit"
-}).format(new Date());
-
-if (todayMoscow > eventEnd) {
-  scheduleNote.textContent = "🏁 РОЗЫГРЫШ WJX ОКОНЧЕН 🏁";
-} else {
-  scheduleNote.textContent =
-    `🎁 РОЗЫГРЫШ WJX НАЧНЁТСЯ С ${formatDate(eventStart)} ПО ${formatDate(eventEnd)} 🎁`;
-}
-}
-      updatePrizeHistory();
+    const value = JSON.parse(localStorage.getItem(pendingKey) || "null");
+    if (
+      value && typeof value.operationId === "string" &&
+      typeof value.isTest === "boolean" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+        .test(value.operationId)
+    ) {
+      return { operationId: value.operationId, isTest: value.isTest };
     }
-  } catch (error) {
-    console.error("Ошибка загрузки лимита:", error);
-  }
+  } catch { /* Storage is optional; the server owns history and attempts. */ }
+  return null;
 }
-async function checkTelegramParticipant() {
-  if (!telegramInitData) {
-    console.log("Telegram authorization data unavailable");
-    return;
-  }
-
+function newOperationId() {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 15) | 64;
+  bytes[8] = (bytes[8] & 63) | 128;
+  const hex = [...bytes].map(byte => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+}
+function savePending() {
   try {
-    const response = await fetch(supabaseFunctionUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        initData: telegramInitData
-      })
-    });
-
-    const result = await response.json();
-
-    console.log("WJX server response:", result);
-
-
-  } catch (error) {
-    console.error("WJX server connection failed:", error);
-  }
+    if (pending) localStorage.setItem(pendingKey, JSON.stringify(pending));
+    else localStorage.removeItem(pendingKey);
+  } catch { /* A quota/privacy error must never hide a saved result. */ }
 }
- 
-checkTelegramParticipant();
-
-
-console.log(
-  "Telegram Mini App:",
-  telegramUserId ? "Пользователь определён" : "Telegram ID недоступен"
-);
-
+function note(text) {
+  byId("connectionNote").textContent = text;
+}
+function serverNow() {
+  return serverAnchor + Math.max(0, performance.now() - performanceAnchor);
+}
 function getMoscowDate() {
+  if (!state) return "";
   const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: eventTimeZone,
+    timeZone: "Europe/Moscow",
     year: "numeric",
     month: "2-digit",
-    day: "2-digit"
-  }).formatToParts(new Date());
-
-  const getPart = (type) =>
-    parts.find((part) => part.type === type).value;
-
-  return `${getPart("year")}-${getPart("month")}-${getPart("day")}`;
+    day: "2-digit",
+  }).formatToParts(new Date(serverNow()));
+  const part = (key) => parts.find((p) => p.type === key).value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
 }
-
 function getEventStatus() {
-  const now = new Date();
-
-  const moscowDateTime = new Intl.DateTimeFormat("sv-SE", {
+  if (!state) return "unavailable";
+  const current = new Intl.DateTimeFormat("sv-SE", {
     timeZone: "Europe/Moscow",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-    hourCycle: "h23"
-  }).format(now);
-
-  const start = `${eventStart} ${eventStartTime}`;
-  const end = `${eventEnd} ${eventEndTime}`;
-
-  if (moscowDateTime < start) return "before";
-  if (moscowDateTime > end) return "finished";
-
+    hourCycle: "h23",
+  }).format(new Date(serverNow()));
+  const settings = state.settings;
+  if (current < `${settings.event_start} ${settings.start_time.slice(0, 5)}`) {
+    return "before";
+  }
+  if (current > `${settings.event_end} ${settings.end_time.slice(0, 5)}`) {
+    return "finished";
+  }
   return "active";
 }
-
-function showEventFinalScreen() {
-  const eventFinished = getEventStatus() === "finished";
-
-  const showMachine = testLeverMode === true || !eventFinished;
-  document.getElementById("finishedMessage").style.display = showMachine ? "none" : "flex";
+function applyState(value) {
+  if (
+    !value || !value.settings || !Array.isArray(value.dailyHistory) ||
+    !value.eventSummary ||
+    !Array.isArray(value.eventSummary.prizes) ||
+    !Number.isFinite(Date.parse(value.serverNow))
+  ) {
+    throw Error("Не удалось прочитать состояние игры. Повторите загрузку.");
+  }
+  state = value;
+  serverAnchor = Date.parse(value.serverNow);
+  performanceAnchor = performance.now();
+  serverStatusLoaded = true;
+  if (testLeverMode === null && value.testRemaining > 0) testLeverMode = true;
+  if (pending && value.pendingOperation?.operationId === pending.operationId) {
+    showResult(value.pendingOperation, true);
+    pending = null;
+    savePending();
+  }
+  render();
+}
+function render() {
+  const status = getEventStatus();
+  const finished = status === "finished";
+  const testing = testLeverMode === true;
+  const showMachine = testing || !finished;
+  byId("finishedMessage").style.display = showMachine ? "none" : "flex";
   document.querySelector(".reels").style.display = showMachine ? "" : "none";
   document.querySelector(".lever").style.display = showMachine ? "" : "none";
-  document.getElementById("bottomCounter").style.display = eventFinished ? "none" : "";
-  // A browser history or screenshot cannot establish eligibility for a prize.
-  document.getElementById("claimPrizeButton").style.display =
-    !showMachine && serverStatusLoaded && eventWinCount > 0 ? "block" : "none";
-  document.getElementById("eventFinalScreen").style.display = "none";
-}
-
-const todayKey = getMoscowDate();
-
-const savedData = JSON.parse(
-  localStorage.getItem("wjxSpins") || "{}"
-);
-
-let spinsToday =
-  savedData.date === todayKey ? savedData.spins || 0 : 0;
-
-let prizeHistory =
-  savedData.date === todayKey ? savedData.history || [] : [];
-let weeklyPrizeHistory = JSON.parse(
-  localStorage.getItem("wjxEventHistory") || "[]"
-);
-
-
-
-const attemptsCounter = document.getElementById("attemptsCounter");
-const bottomCounter = document.getElementById("bottomCounter");
-const prizeResult = document.getElementById("prizeResult");
-const limitMessage = document.getElementById("limitMessage");
- 
-function updatePrizeHistory() {
- bottomCounter.textContent =
-  spinsToday >= maxDailySpins
-    ? "🔒 На сегодня лимит исчерпан"
-    : `🎰 Сегодня: ${spinsToday} из ${maxDailySpins} прокруток`;
-  attemptsCounter.textContent =
-    `Сегодня: ${spinsToday} из ${maxDailySpins} прокруток`;
-
-  prizeResult.innerHTML = "";
-
-  const lastFive = prizeHistory.slice(-3);
-
-for (let i = 0; i < 3; i++) {
+  byId("eventFinalScreen").style.display = "none";
+  byId("bottomCounter").style.display = finished ? "none" : "";
+  byId("claimPrizeButton").style.display =
+    finished && !testing && serverStatusLoaded &&
+      state?.eventSummary.total_wins > 0
+      ? "block"
+      : "none";
+  const testRemaining = state?.testRemaining || 0;
+  byId("testPlayPanel").hidden = testRemaining <= 0 && testLeverMode === null &&
+    !byId("testSpinResult").textContent;
+  byId("testModeToggle").checked = testing;
+  byId("testModeToggle").disabled = spinning || !!pending;
+  byId("playModeNote").hidden = !testing;
+  byId("testBalanceNote").textContent =
+    `Осталось тестовых попыток: ${testRemaining}. Они не расходуют реальные попытки.`;
+  lever.setAttribute(
+    "aria-label",
+    testing
+      ? "Тестовая прокрутка рычагом — без выдачи призов"
+      : "Потянуть рычаг",
+  );
+  lever.disabled = spinning || !serverStatusLoaded || !!pending;
+  button.disabled = lever.disabled;
+  testSpinButton.disabled = lever.disabled || testRemaining <= 0;
+  byId("retryLoadButton").disabled = spinning;
+  byId("recoverSpinButton").hidden = !pending;
+  byId("recoverSpinButton").disabled = spinning;
+  const history = byId("prizeResult");
+  history.replaceChildren();
+  const last = (state?.dailyHistory || []).slice(-3);
+  for (let i = 0; i < 3; i++) {
     const line = document.createElement("div");
-    line.textContent = `${i + 1}. ${lastFive[i] ?? "—"}`;
-    prizeResult.appendChild(line);
+    line.textContent = `${i + 1}. ${last[i] ? prizeLabel(last[i].prize) : "—"}`;
+    history.append(line);
   }
-
-  limitMessage.textContent =
-    spinsToday >= maxDailySpins
-      ? "🔒 На сегодня лимит исчерпан"
-      : `🎰 Осталось попыток: ${maxDailySpins - spinsToday}`;
+  const counter = state
+    ? `🎰 Сегодня: ${state.spinsUsed} из ${state.settings.daily_spins} прокруток`
+    : "Загружаем попытки…";
+  byId("attemptsCounter").textContent = counter;
+  byId("bottomCounter").textContent = counter;
+  byId("limitMessage").textContent = state
+    ? (state.spinsRemaining > 0
+      ? `🎰 Осталось попыток: ${state.spinsRemaining}`
+      : "🔒 На сегодня лимит исчерпан")
+    : "";
+  const prizes = byId("myPrizes");
+  prizes.replaceChildren();
+  byId("myPrizesPanel").hidden = !state;
+  if (state) {
+    const date = (value) => value.split("-").reverse().join(".");
+    const settings = state.settings;
+    const period = `${date(settings.event_start)} — ${
+      date(settings.event_end)
+    }`;
+    byId("eventScheduleNote").textContent = finished
+      ? "🏁 РОЗЫГРЫШ WJX ОКОНЧЕН 🏁"
+      : `${
+        status === "before" ? "🎁 Розыгрыш начнётся" : "🎰 Розыгрыш идёт"
+      }: ${period}. Начало ${settings.start_time.slice(0, 5)}, окончание ${
+        settings.end_time.slice(0, 5)
+      } МСК.`;
+    byId("myPrizesPeriod").textContent = `За период ${period}`;
+    for (const item of state.eventSummary.prizes) {
+      if (!item.prize || item.prize.trim() === "Без выигрыша") continue;
+      const line = document.createElement("p");
+      line.textContent = `${item.prize} × ${item.quantity}`;
+      prizes.append(line);
+    }
+    if (!prizes.childNodes.length) {
+      prizes.textContent = "Реальных призов пока нет.";
+    }
+  }
 }
-
-updatePrizeHistory();
- 
-let serverStatusLoaded = false;
-let eventWinCount = 0;
-let testRemaining = 0;
-let testLeverMode = null;
-const testSpinButton = document.getElementById("testSpinButton");
-function updateTestBalance() {
-  if (testLeverMode === null && testRemaining > 0) testLeverMode = true;
-  document.getElementById("testPlayPanel").hidden = testRemaining <= 0 && testLeverMode === null && !document.getElementById("testSpinResult").textContent;
-  document.getElementById("testModeToggle").checked = testLeverMode === true;
-  document.getElementById("testModeToggle").disabled = spinning;
-  document.getElementById("playModeNote").hidden = testLeverMode !== true;
-  lever.setAttribute("aria-label", testLeverMode === true ? "Тестовая прокрутка рычагом — без выдачи призов" : "Потянуть рычаг");
-  document.getElementById("testBalanceNote").textContent = `Осталось тестовых попыток: ${testRemaining}. Они не расходуют реальные попытки.`;
-  testSpinButton.disabled = spinning || testRemaining <= 0;
+function prizeLabel(prize) {
+  return prize && prize !== "Без выигрыша" ? `🎁 ${prize}` : "Без выигрыша";
 }
- 
-async function loadServerStatus() {
-  if (!telegramInitData) return;
-
+function showResult(result, recovered = false) {
+  const text = `${recovered ? "Восстановленный результат" : "Результат"} ${
+    result.spinDate.split("-").reverse().join(".")
+  }: ${prizeLabel(result.prize)}`;
+  if (result.isTest) {
+    byId("testSpinResult").textContent =
+      `Тестовый ${text.toLowerCase()}. Приз не выдаётся.`;
+  } else byId("lastSpinResult").textContent = text;
+}
+async function api(body) {
+  if (!telegramInitData) throw Error("Откройте рулетку через Telegram.");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
   try {
-const status = await requestServerStatus();
-
-spinsToday = status.spinsUsed;
-eventWinCount = Number(status.eventWinCount) || 0;
-testRemaining = status.testRemaining ?? 0;
-updateTestBalance();
-prizeHistory = prizeHistory.slice(-spinsToday);
-
-if (spinsToday === 0) {
-  prizeHistory = [];
-}
-
-updatePrizeHistory();
-serverStatusLoaded = true;
+    const response = await fetch(supabaseFunctionUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      cache: "no-store",
+      body: JSON.stringify({ ...body, initData: telegramInitData }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      const error = Error(
+        response.status === 401
+          ? "Сессия Telegram истекла. Закройте и откройте Mini App заново."
+          : result.error || "Сервис временно недоступен.",
+      );
+      error.definitive = [400, 403, 409, 429].includes(response.status);
+      error.needsReopen = response.status === 401;
+      throw error;
+    }
+    return result;
   } catch (error) {
-    console.error("Could not load server status:", error);
+    if (error.name === "AbortError") {
+      throw Error("Сервер не ответил вовремя. Проверьте соединение.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
 }
-
-setInterval(showEventFinalScreen, 30000);
-
-loadServerStatus().then(async () => {
-  await loadRouletteSettings();
-  showEventFinalScreen();
+async function loadServerStatus() {
+  if (refreshing) return refreshing;
+  if (!telegramInitData) {
+    serverStatusLoaded = false;
+    note("Откройте рулетку через Telegram.");
+    render();
+    return;
+  }
+  refreshing = (async () => {
+    serverStatusLoaded = false;
+    render();
+    note("Проверяем состояние игры…");
+    try {
+      applyState(
+        await api({
+          action: "status",
+          ...(pending ? { operationId: pending.operationId } : {}),
+        }),
+      );
+      note(
+        pending
+          ? "Результат прокрутки ещё не подтверждён. Нажмите «Проверить результат» — новая попытка не будет потрачена."
+          : "Состояние игры обновлено.",
+      );
+      byId("retryLoadButton").hidden = true;
+    } catch (error) {
+      serverStatusLoaded = false;
+      note(error.message + " Нажмите «Повторить загрузку».");
+      byId("retryLoadButton").hidden = false;
+      render();
+    }
+  })();
+  try {
+    await refreshing;
+  } finally {
+    refreshing = null;
+  }
+}
+async function playSpin(isTest = false, recover = false) {
+  if (spinning) return;
+  if (pending && !recover) {
+    note("Сначала проверьте результат предыдущей прокрутки.");
+    render();
+    return;
+  }
+  if (!pending) {
+    if (!serverStatusLoaded) {
+      await loadServerStatus();
+      return;
+    }
+    if (!isTest && getEventStatus() !== "active") {
+      alert(
+        getEventStatus() === "before"
+          ? `🎰 Розыгрыш начнётся ${state.settings.event_start} в ${
+            state.settings.start_time.slice(0, 5)
+          } МСК! Ждём тебя!`
+          : "🎁 Розыгрыш уже завершён!",
+      );
+      return;
+    }
+    if (isTest && state.testRemaining <= 0) {
+      byId("testSpinResult").textContent =
+        "Тестовые попытки закончились. Для реальной игры выключите тестовый режим рычага.";
+      return;
+    }
+    pending = { operationId: newOperationId(), isTest };
+    savePending();
+  }
+  const operation = { ...pending };
+  spinning = true;
+  render();
+  note(recover ? "Проверяем сохранённый результат…" : "Сохраняем прокрутку…");
+  try {
+    const result = await api({
+      action: operation.isTest ? "test_spin" : "spin",
+      operationId: operation.operationId,
+    });
+    if (
+      result.operationId !== operation.operationId ||
+      result.isTest !== operation.isTest
+    ) throw Error("Не удалось подтвердить результат.");
+    // Show committed results before animation, without depending on optional storage.
+    showResult(result, recover || result.replayed);
+    pending = null;
+    savePending();
+    try {
+      applyState(result.state);
+    } catch {
+      serverStatusLoaded = false;
+      byId("retryLoadButton").hidden = false;
+    }
+    note("Результат сохранён.");
+    if (!recover) {
+      const target = result.prize && prizeImages[result.prize]
+        ? Array(4).fill(prizeImages[result.prize])
+        : symbols.slice(0, 4);
+      try {
+        await Promise.all(
+          reels.map((reel, index) => spinReel(reel, index, target[index])),
+        );
+      } catch {
+        /* History and result remain visible if animation is unavailable. */
+      }
+    }
+  } catch (error) {
+    if (error.definitive) {
+      pending = null;
+      savePending();
+    }
+    note(
+      error.needsReopen
+        ? error.message
+        : pending
+        ? "Ответ не получен. Нажмите «Проверить результат» — повтор не потратит новую попытку."
+        : error.message,
+    );
+    if (!pending) await loadServerStatus();
+  } finally {
+    spinning = false;
+    render();
+  }
+}
+button.addEventListener("click", () => playSpin(false));
+testSpinButton.addEventListener("click", () => {
+  testLeverMode = true;
+  render();
+  playSpin(true);
 });
+byId("testModeToggle").addEventListener("change", (event) => {
+  testLeverMode = event.target.checked;
+  render();
+});
+lever.addEventListener("click", () => {
+  if (spinning || lever.disabled) return;
+  lever.classList.remove("pulling");
+  void lever.offsetWidth;
+  lever.classList.add("pulling");
+  playSpin(testLeverMode === true);
+});
+lever.addEventListener("animationend", (event) => {
+  if (event.target === lever.querySelector(".lever-stick")) {
+    lever.classList.remove("pulling");
+  }
+});
+byId("recoverSpinButton").addEventListener("click", () => {
+  if (pending) playSpin(pending.isTest, true);
+});
+byId("retryLoadButton").addEventListener("click", () => loadServerStatus());
+byId("claimPrizeButton").addEventListener("click", () => {
+  if (
+    getEventStatus() !== "finished" || testLeverMode === true ||
+    !serverStatusLoaded || !state?.eventSummary.total_wins
+  ) return;
+  if (window.Telegram?.WebApp?.openTelegramLink) {
+    window.Telegram.WebApp.openTelegramLink(managerUrl);
+  } else window.open(managerUrl, "_blank", "noopener,noreferrer");
+});
+window.addEventListener("online", () => {
+  if (!spinning) loadServerStatus();
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && !spinning) loadServerStatus();
+});
+setInterval(() => {
+  if (!document.hidden && !spinning) loadServerStatus();
+}, 60000);
+render();
+loadServerStatus();
 
+const getHeight = (reel) => reel.clientHeight;
 
-
-  const getHeight = reel => reel.clientHeight;
-
- 
 function makeSymbol(value, height) {
   const item = document.createElement("div");
   item.className = "symbol";
   item.style.height = height + "px";
 
-if (/\.(png|webp)$/i.test(value)) {
+  if (/\.(png|webp)$/i.test(value)) {
     const img = document.createElement("img");
     img.src = encodeURI(value);
     img.alt = "Упаковка картриджей WJX";
@@ -1046,283 +1201,66 @@ if (/\.(png|webp)$/i.test(value)) {
   return item;
 }
 
-  function randomSymbol() {
-    return symbols[Math.floor(Math.random() * symbols.length)];
-  }
-
-  function setInitialReel(reel) {
-    const strip = reel.querySelector(".reel-strip");
-    strip.replaceChildren(makeSymbol(randomSymbol(), getHeight(reel)));
-    strip.style.transform = "translateY(0)";
-  }
-
-  reels.forEach(setInitialReel);
-
-  async function spinReel(reel, index, targetSymbol) {
-    const strip = reel.querySelector(".reel-strip");
-    const height = getHeight(reel);
-    const count = 28 + index * 7;
-    const fragment = document.createDocumentFragment();
-
-    for (let i = 0; i < count; i++) {
-  const symbol = i === 0 && targetSymbol
-    ? targetSymbol
-    : randomSymbol();
-
-  fragment.appendChild(makeSymbol(symbol, height));
+function randomSymbol() {
+  return symbols[Math.floor(Math.random() * symbols.length)];
 }
 
-    strip.replaceChildren(fragment);
+function setInitialReel(reel) {
+  const strip = reel.querySelector(".reel-strip");
+  strip.replaceChildren(makeSymbol(randomSymbol(), getHeight(reel)));
+  strip.style.transform = "translateY(0)";
+}
 
-    const distance = (count - 1) * height;
-    const duration = 2300 + index * 650;
-   
-   strip.style.transform = `translateY(-${distance}px)`;
-   
-    const animation = strip.animate(
-      [
-        { transform: `translateY(-${distance}px)` },
-        { transform:  "translateY(0)" }
-      ],
-      {
-        duration,
-        easing: "cubic-bezier(0.16, 0.72, 0.22, 1)",
-        fill: "forwards"
-      }
-    );
+reels.forEach(setInitialReel);
 
-    animations.push(animation);
+async function spinReel(reel, index, targetSymbol) {
+  const strip = reel.querySelector(".reel-strip");
+  const height = getHeight(reel);
+  const count = 28 + index * 7;
+  const fragment = document.createDocumentFragment();
 
-    try {
-      await animation.finished;
-    } catch {
-      return;
-    }
+  for (let i = 0; i < count; i++) {
+    const symbol = i === 0 && targetSymbol ? targetSymbol : randomSymbol();
 
-   
-const firstItem = strip.firstElementChild;
-const finalImage = firstItem.querySelector("img");
-
-const finalSymbol = finalImage
-  ? decodeURI(new URL(finalImage.src).pathname.split("/").pop())
-  : firstItem.textContent;
-
-animation.cancel();
-strip.replaceChildren(makeSymbol(finalSymbol, height));
-    strip.style.transform = "translateY(0)";
-  }
-async function requestServerStatus() {
-  if (!telegramInitData) {
-    throw new Error("Нет данных Telegram");
+    fragment.appendChild(makeSymbol(symbol, height));
   }
 
-  const response = await fetch(supabaseFunctionUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
+  strip.replaceChildren(fragment);
+
+  const distance = (count - 1) * height;
+  const duration = 2300 + index * 650;
+
+  strip.style.transform = `translateY(-${distance}px)`;
+
+  const animation = strip.animate(
+    [
+      { transform: `translateY(-${distance}px)` },
+      { transform: "translateY(0)" },
+    ],
+    {
+      duration,
+      easing: "cubic-bezier(0.16, 0.72, 0.22, 1)",
+      fill: "forwards",
     },
-    body: JSON.stringify({
-      initData: telegramInitData,
-      action: "status"
-    })
-  });
-
-  const result = await response.json();
-
-  if (!response.ok || !result.success) {
-    throw new Error(
-      result.error || "Не удалось загрузить попытки"
-    );
-  }
-
-  return result;
-}
-async function requestServerSpin(isTest = false) {
-  if (!telegramInitData) {
-    throw new Error("Открой рулетку через Telegram");
-  }
-
-  const response = await fetch(supabaseFunctionUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      initData: telegramInitData,
-      action: isTest ? "test_spin" : "spin"
-    })
-  });
-
-  const result = await response.json();
-
-  if (!response.ok || !result.success) {
-    throw new Error(
-      result.error || "Не удалось сохранить прокрутку"
-    );
-  }
-
-  return result;
-}
-  async function playSpin(isTest = false) {
-const eventStatus = getEventStatus();
-
-
-if (!isTest && eventStatus !== "active") {
-  alert(
-    eventStatus === "before"
-      ? `🎰 Розыгрыш начнётся ${eventStart} в ${eventStartTime} МСК! Ждём тебя!`
-      : "🎁 Розыгрыш уже завершён!"
   );
-  return;
-}
 
-    
-if (isTest && testRemaining <= 0) {
-  document.getElementById("testSpinResult").textContent = "Тестовые попытки закончились. Для реальной игры выключите тестовый режим рычага.";
-  return;
-}
-if (spinning || !serverStatusLoaded) {
-  return;
-}
-
-
-spinning = true;
-button.disabled = true;
-testSpinButton.disabled = true;
-if (isTest) {
-  document.querySelector(".reels").style.display = "";
-  document.getElementById("finishedMessage").style.display = "none";
-}
-
-let selectedPrize = null;
-let reelResults = [];
-
-try {
-  const serverSpin = await requestServerSpin(isTest);
-
-  selectedPrize = serverSpin.prize;
-
-  if (selectedPrize && prizeImages[selectedPrize]) {
-    reelResults = Array(4).fill(prizeImages[selectedPrize]);
-  } else {
-    reelResults = [
-      symbols[0],
-      symbols[1],
-      symbols[2],
-      symbols[3]
-    ];
-  }
-
-  if (isTest) {
-    if (!serverSpin.isTest) throw new Error("Некорректный ответ тестовой прокрутки");
-    testRemaining = serverSpin.testRemaining;
-    updateTestBalance();
-  } else {
-    spinsToday = serverSpin.spinNumber;
-    if (serverSpin.prize) eventWinCount += 1;
-    updatePrizeHistory();
-  }
-
-} catch (error) {
-  console.error("Server spin failed:", error);
-
-  spinning = false;
-  button.disabled = false;
-  updateTestBalance();
-  if (isTest) await loadServerStatus();
-  alert("Не удалось выполнить прокрутку: " + error.message);
-  return;
-}
-
-button.disabled = true;
-    button.textContent = "🎰 БАРАБАНЫ КРУТЯТСЯ...";
-
-   
-
-try {
-  limitMessage.textContent = "🎰 Барабаны крутятся...";
-
-  await Promise.all(
-  reels.map((reel, index) =>
-    spinReel(reel, index, reelResults[index])
-  )
-);
-
- 
-const prizeText = selectedPrize
-  ? "🎁 " + selectedPrize
-  : "Без выигрыша";
-
-if (isTest) {
-  document.getElementById("testSpinResult").textContent = `Тестовый результат: ${prizeText}. Приз не выдаётся.`;
-  updateTestBalance();
-} else {
-prizeHistory.push(prizeText);
-
-weeklyPrizeHistory.push({
-  date: todayKey,
-  prize: prizeText
-});
-
-localStorage.setItem(
-  "wjxEventHistory",
-  JSON.stringify(weeklyPrizeHistory)
-);
-
-
-localStorage.setItem("wjxSpins", JSON.stringify({
-  date: todayKey,
-  spins: spinsToday,
-  history: prizeHistory
-}));
-
-updatePrizeHistory();
-}
-showEventFinalScreen();
-
-} finally {
-      spinning = false;
-      button.disabled = false;
-      button.textContent = "🎰 КРУТИТЬ ЕЩЁ";
-      updateTestBalance();
-    }
-  }
-  button.addEventListener("click", () => playSpin(false));
-  testSpinButton.addEventListener("click", () => {
-    testLeverMode = true;
-    updateTestBalance();
-    showEventFinalScreen();
-    playSpin(true);
-  });
-  document.getElementById("testModeToggle").addEventListener("change", event => {
-    testLeverMode = event.target.checked;
-    updateTestBalance();
-    showEventFinalScreen();
-  });
- 
-lever.addEventListener("click", () => {
-  if (spinning || lever.classList.contains("pulling")) return;
-
-  lever.classList.remove("pulling");
-  void lever.offsetWidth;
-  lever.classList.add("pulling");
-
-  const useTestAttempts = testLeverMode === true;
-  setTimeout(() => {
-    playSpin(useTestAttempts);
-  }, 800);
-});
-
-
-lever.addEventListener("animationend", (event) => {
-  if (event.target !== lever.querySelector(".lever-stick")) {
+  try {
+    await animation.finished;
+  } catch {
     return;
   }
 
-  lever.classList.remove("pulling");
-});
+  const firstItem = strip.firstElementChild;
+  const finalImage = firstItem.querySelector("img");
 
+  const finalSymbol = finalImage
+    ? decodeURI(new URL(finalImage.src).pathname.split("/").pop())
+    : firstItem.textContent;
 
+  animation.cancel();
+  strip.replaceChildren(makeSymbol(finalSymbol, height));
+  strip.style.transform = "translateY(0)";
+}
 </script>
 </body>
 </html>

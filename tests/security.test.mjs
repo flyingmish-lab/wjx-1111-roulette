@@ -55,7 +55,7 @@ test('database outages and missing configuration fail closed',async()=>{
 test('every admin API rejects Telegram-only, unsigned, expired and revoked sessions',async()=>{
   const {db,s,roulette}=await setup();
   const owner=await telegramData(221535678);
-  for(const action of ['admin_get_settings','admin_save_settings','admin_get_prizes','admin_save_prize_chances','admin_test_users','admin_set_test_spins','admin_get_winners','admin_get_user_wins']) {
+  for(const action of ['admin_get_settings','admin_save_settings','admin_get_prizes','admin_save_prize_chances','admin_test_users','admin_set_test_spins','admin_get_winners','admin_get_user_wins','admin_mark_prizes_delivered']) {
     const before=db.calls.length;
     assert.equal((await roulette(request({action,initData:owner}))).status,401);
     assert.equal(db.calls.length,before,'no DB access before authentication');
@@ -149,4 +149,28 @@ test('winner lookup requires admin authorization, validates inputs and binds pla
   const status=await roulette(request({action:'status',initData,telegram_id:221535678}));
   assert.equal(status.status,200);assert.equal((await status.json()).eventWinCount,4);
   assert.equal(db.calls.filter(c=>c.rpc==='wjx_user_prize_summary').at(-1).args.p_telegram_id,123456789);
+});
+
+
+test('operation IDs bind retries to the verified player and mode, even after the event ends',async()=>{
+  const {db,roulette}=await setup();const initData=await telegramData(123456789);
+  const id='00000000-0000-4000-8000-000000000001';
+  for(const operationId of [undefined,null,'bad',1]) assert.equal((await roulette(request({action:'spin',initData,operationId}))).status,400);
+  const spin=()=>roulette(request({action:'spin',initData,operationId:id,telegram_id:221535678}));
+  const first=await (await spin()).json();assert.equal(first.isTest,false);assert.equal(db.operations.size,1);
+  db.settings.event_end='2001-01-01';
+  const retry=await spin();assert.equal(retry.status,200);const recovered=await retry.json();
+  assert.equal(recovered.prize,first.prize);assert.equal(recovered.operationId,id);assert.equal(recovered.replayed,true);
+  assert.equal(db.calls.filter(c=>c.rpc==='wjx_save_spin').length,1);
+  assert.equal((await roulette(request({action:'test_spin',initData,operationId:id}))).status,409);
+  assert.equal([...db.operations.keys()][0],'123456789:'+id);
+});
+test('a committed spin remains recoverable when the subsequent state query fails',async()=>{
+  const {db,roulette}=await setup();const initData=await telegramData(123456789);
+  const id='00000000-0000-4000-8000-000000000003';const original=db.rpc;
+  db.rpc=async(name,args)=>name==='wjx_player_state'?{error:{code:'offline'}}:original(name,args);
+  const body={action:'spin',initData,operationId:id};
+  assert.equal((await roulette(request(body))).status,503);assert.equal(db.operations.size,1);
+  db.rpc=original;const retry=await roulette(request(body));assert.equal(retry.status,200);
+  assert.equal(db.calls.filter(c=>c.rpc==='wjx_save_spin').length,1);
 });

@@ -150,3 +150,57 @@ test('winner reports aggregate only real prizes over all configured event days, 
     assert.equal((await db.query("select wjx_event_winners('empty',0) as report")).rows[0].report.winners.length,0);
   } finally {await db.close();}
 });
+
+test('one operation commits one real or test spin, survives late retries and rolls back failed attempts',async()=>{
+  const db=new PGlite();try {
+    await db.exec(fixture);
+    for(const name of fs.readdirSync('supabase/migrations').filter(n=>n.endsWith('.sql')).sort())await db.exec(fs.readFileSync('supabase/migrations/'+name,'utf8'));
+    for(const role of ['anon','authenticated']) {
+      for(const table of ['wjx_spin_operations','wjx_prize_deliveries'])assert.equal((await db.query("select has_table_privilege($1,$2,'SELECT') as x",[role,table])).rows[0].x,false);
+      for(const fn of ['wjx_perform_spin(bigint,uuid,boolean,text)','wjx_player_state(bigint,uuid)','wjx_mark_prizes_delivered(bigint,text)'])assert.equal((await db.query("select has_function_privilege($1,$2,'EXECUTE') as x",[role,fn])).rows[0].x,false);
+    }
+    await db.exec('set role service_role');
+    const id='00000000-0000-4000-8000-000000000001';
+    const call=(user,key,testing=false)=>db.query('select wjx_perform_spin($1,$2,$3,$4) as result',[user,key,testing,'Без выигрыша']);
+    const first=(await call(123456789,id)).rows[0].result;
+    const retries=await Promise.all(Array.from({length:20},()=>call(123456789,id)));
+    for(const retry of retries)assert.deepEqual(retry.rows[0].result,first);
+    assert.equal((await db.query('select count(*)::int as n from wjx_spins')).rows[0].n,1);
+    await assert.rejects(call(123456789,id,true),/mode mismatch/);
+    const other=(await call(382749857,id)).rows[0].result;assert.equal(other.spinNumber,1);
+    await db.exec("update roulette_settings set event_start='2099-01-01'");
+    assert.deepEqual((await call(123456789,id)).rows[0].result,first);
+    const next='00000000-0000-4000-8000-000000000002';
+    await assert.rejects(call(123456789,next),/Event is not active/);
+    assert.equal((await db.query('select count(*)::int as n from wjx_spin_operations')).rows[0].n,2);
+    await db.query('select wjx_set_test_spins(123456789,2)');
+    const trial=(await call(123456789,next,true)).rows[0].result;assert.equal(trial.testRemaining,1);
+    assert.deepEqual((await call(123456789,next,true)).rows[0].result,trial);
+    assert.equal((await db.query('select remaining from wjx_test_balances where telegram_id=123456789')).rows[0].remaining,1);
+    const state=(await db.query('select wjx_player_state($1,$2) as result',[123456789,id])).rows[0].result;
+    assert.equal(state.dailyHistory.length,1);assert.equal(state.spinsUsed,1);assert.equal(state.eventStatus,'before');assert.deepEqual(state.pendingOperation,first);
+    const stranger=(await db.query('select wjx_player_state($1,$2) as result',[221535678,id])).rows[0].result;
+    assert.equal(stranger.pendingOperation,null);assert.equal(stranger.dailyHistory.length,0);
+  } finally {await db.close();}
+});
+
+test('delivery marks persisted real wins once, excludes tests/misses and preserves original game data',async()=>{
+  const db=new PGlite();try {
+    await db.exec(fixture);
+    for(const name of fs.readdirSync('supabase/migrations').filter(n=>n.endsWith('.sql')).sort())await db.exec(fs.readFileSync('supabase/migrations/'+name,'utf8'));
+    await db.exec(`update roulette_settings set event_start='2001-01-01',event_end='2001-01-03';
+      insert into wjx_spins(telegram_id,spin_date,spin_number,prize) values
+      (123456789,'2001-01-01',1,'Картридж'),(123456789,'2001-01-02',1,'Noir Blade'),
+      (123456789,'2001-01-02',2,'Без выигрыша'),(123456789,'2001-01-04',1,'Noir Blade');
+      insert into wjx_test_spins(telegram_id,spin_date,spin_number,prize) values(123456789,'2001-01-01',1,'Картридж');set role service_role;`);
+    const summary=async()=>(await db.query('select wjx_user_prize_summary(123456789) as r')).rows[0].r;
+    assert.equal((await summary()).remaining_count,2);assert.equal((await summary()).can_deliver,true);
+    const marks=await Promise.all(Array.from({length:10},()=>db.query('select wjx_mark_prizes_delivered($1,$2) as r',[123456789,'a'.repeat(64)])));
+    assert.equal(marks.reduce((n,x)=>n+x.rows[0].r.marked_count,0),2);
+    const after=await summary();assert.equal(after.total_wins,2);assert.equal(after.delivered_count,2);assert.equal(after.remaining_count,0);assert.equal(after.delivered_prizes.length,2);
+    assert.equal((await db.query('select count(*)::int as n from wjx_spins')).rows[0].n,4);
+    await db.exec("update roulette_settings set event_start='2000-01-01',event_end='2099-12-31'");
+    await assert.rejects(db.query('select wjx_mark_prizes_delivered($1,$2)',[123456789,'a'.repeat(64)]),/Event has not finished/);
+    await assert.rejects(db.query('select wjx_mark_prizes_delivered($1,$2)',[123456789,'bad']),/Invalid session/);
+  } finally {await db.close();}
+});

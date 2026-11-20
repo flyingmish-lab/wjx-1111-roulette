@@ -129,6 +129,7 @@ async function roulette(req: Request): Promise<Response> {
   const requestData = await readBody(req);
   const action = requestData.action || "register";
   const adminActions = [
+    "admin_mark_prizes_delivered",
     "admin_get_winners",
     "admin_get_user_wins",
     "admin_test_users",
@@ -146,6 +147,7 @@ async function roulette(req: Request): Promise<Response> {
   ) {
     return json({ success: false, error: "Unknown action" }, 400);
   }
+  let adminSessionHash: string | null = null;
   if (isAdminAction) {
     const session = await requireAdmin(
       req,
@@ -153,6 +155,7 @@ async function roulette(req: Request): Promise<Response> {
       Deno.env.get("WJX_ADMIN_PASSWORD") ?? "",
       Deno.env.get("WJX_ADMIN_SESSION_SECRET") ?? "",
     );
+    adminSessionHash = session;
     if (!session) {
       return json(
         { success: false, error: "Сессия истекла. Войдите снова." },
@@ -278,25 +281,87 @@ async function roulette(req: Request): Promise<Response> {
       );
     }
   }
-  const moscowParts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/Moscow",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-
-  const getMoscowPart = (type: string) =>
-    moscowParts.find((part) => part.type === type)?.value;
-
-  const todayMoscow = `${getMoscowPart("year")}-${getMoscowPart("month")}-${
-    getMoscowPart("day")
-  }`;
-  const timeMoscow = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/Moscow",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).format(new Date());
+  const operationId = requestData.operationId;
+  const validOperationId = (value: unknown): value is string =>
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      .test(value);
+  async function playerState() {
+    const { data, error } = await supabase.rpc("wjx_player_state", {
+      p_telegram_id: telegramUserId,
+      p_request_id: operationId ?? null,
+    });
+    if (error || !data || !data.eventSummary) {
+      throw new Error("Player state unavailable");
+    }
+    return {
+      ...data,
+      eventWinCount: Number(data.eventSummary.total_wins ?? 0),
+    };
+  }
+  if (action === "status" || action === "spin" || action === "test_spin") {
+    if (
+      (operationId !== undefined || action !== "status") &&
+      !validOperationId(operationId)
+    ) {
+      return json({
+        success: false,
+        error: "Обновите Mini App и повторите загрузку.",
+      }, 400);
+    }
+    if (action === "status") {
+      return json({ success: true, ...await playerState() });
+    }
+    const isTest = action === "test_spin";
+    // Return already committed results even after the event ends or chances change.
+    const { data: previous, error: lookupError } = await supabase.from(
+      "wjx_spin_operations",
+    )
+      .select("is_test,result").eq("telegram_id", telegramUserId).eq(
+        "request_id",
+        operationId,
+      ).maybeSingle();
+    if (lookupError) throw new Error("Operation lookup failed");
+    if (previous && previous.is_test !== isTest) {
+      return json(
+        { success: false, error: "Режим операции не совпадает" },
+        409,
+      );
+    }
+    let result = previous?.result;
+    if (!previous) {
+      const selectedPrize = choosePrize(await loadPrizeChances());
+      const { data, error } = await supabase.rpc("wjx_perform_spin", {
+        p_telegram_id: telegramUserId,
+        p_request_id: operationId,
+        p_is_test: isTest,
+        p_prize: selectedPrize ?? "Без выигрыша",
+      });
+      if (error) {
+        if (["P0001", "P0002", "22023"].includes(error.code)) {
+          return json({
+            success: false,
+            error: error.code === "P0001"
+              ? (isTest
+                ? "Тестовые попытки закончились"
+                : "На сегодня лимит попыток исчерпан")
+              : error.code === "P0002"
+              ? "Розыгрыш сейчас недоступен"
+              : "Некорректная операция",
+          }, error.code === "P0001" ? 429 : error.code === "P0002" ? 403 : 400);
+        }
+        throw new Error("Spin unavailable");
+      }
+      result = data;
+    }
+    if (!result) throw new Error("Spin result missing");
+    return json({
+      success: true,
+      ...result,
+      replayed: !!previous,
+      state: await playerState(),
+    });
+  }
 
   const { data: rouletteSettings, error: settingsError } = await supabase
     .from(settingsTable)
@@ -318,6 +383,25 @@ async function roulette(req: Request): Promise<Response> {
     );
   }
 
+  if (action === "admin_mark_prizes_delivered") {
+    const id = Number(requestData.telegram_id);
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      return json({ success: false, error: "Некорректный Telegram ID" }, 400);
+    }
+    const { data, error } = await supabase.rpc("wjx_mark_prizes_delivered", {
+      p_telegram_id: id,
+      p_session_hash: adminSessionHash,
+    });
+    if (error?.code === "P0002") {
+      return json({
+        success: false,
+        error:
+          "Выдача доступна зарегистрированному участнику после окончания розыгрыша.",
+      }, 409);
+    }
+    if (error || !data) throw new Error("Delivery unavailable");
+    return json({ success: true, ...data });
+  }
   if (action === "admin_get_winners") {
     const search = requestData.search ?? "";
     const offset = requestData.offset ?? 0;
@@ -387,27 +471,6 @@ async function roulette(req: Request): Promise<Response> {
     if (error) throw new Error("Test allocation failed");
     return json({ success: true, testRemaining: data });
   }
-  if (action === "test_spin") {
-    const selectedPrize = choosePrize(await loadPrizeChances());
-    const { data, error } = await supabase.rpc("wjx_use_test_spin", {
-      p_telegram_id: telegramUserId,
-      p_prize: selectedPrize ?? "Без выигрыша",
-    });
-    if (error?.code === "P0001") {
-      return json(
-        { success: false, error: "Тестовые попытки закончились" },
-        429,
-      );
-    }
-    if (error) throw new Error("Test spin failed");
-    return json({
-      success: true,
-      isTest: true,
-      prize: selectedPrize,
-      testRemaining: data,
-    });
-  }
-
   if (action === "admin_save_prize_chances") {
     const prizes = requestData.prizes;
 
@@ -544,154 +607,6 @@ async function roulette(req: Request): Promise<Response> {
     return Response.json(
       { success: true, settings: data },
       { headers: corsHeaders },
-    );
-  }
-
-  if (
-    action === "spin" &&
-    (
-      `${todayMoscow}T${timeMoscow}` <
-        `${rouletteSettings.event_start}T${
-          rouletteSettings.start_time.slice(0, 5)
-        }` ||
-      `${todayMoscow}T${timeMoscow}` >
-        `${rouletteSettings.event_end}T${rouletteSettings.end_time.slice(0, 5)}`
-    )
-  ) {
-    return Response.json(
-      {
-        success: false,
-        error:
-          `Розыгрыш доступен с ${rouletteSettings.event_start} по ${rouletteSettings.event_end}`,
-      },
-      {
-        status: 403,
-        headers: corsHeaders,
-      },
-    );
-  }
-
-  if (action === "status") {
-    const { count, error } = await supabase
-      .from("wjx_spins")
-      .select("id", { count: "exact", head: true })
-      .eq("telegram_id", telegramUserId)
-      .eq("spin_date", todayMoscow);
-
-    if (error) {
-      return Response.json(
-        { success: false, error: "Could not load spins" },
-        { status: 500, headers: corsHeaders },
-      );
-    }
-
-    const spinsUsed = count ?? 0;
-    const { data: eventSummary, error: summaryError } = await supabase.rpc(
-      "wjx_user_prize_summary",
-      { p_telegram_id: telegramUserId },
-    );
-    if (summaryError || !eventSummary) {
-      throw new Error("Participant prizes unavailable");
-    }
-    const { data: balance, error: balanceError } = await supabase.from(
-      "wjx_test_balances",
-    )
-      .select("remaining").eq("telegram_id", telegramUserId).maybeSingle();
-    if (balanceError) throw new Error("Test balance unavailable");
-
-    return Response.json(
-      {
-        success: true,
-        eventWinCount: Number(eventSummary.total_wins ?? 0),
-        testRemaining: balance?.remaining ?? 0,
-        spinsUsed: spinsUsed,
-        spinsRemaining: Math.max(0, rouletteSettings.daily_spins - spinsUsed),
-        settings: {
-          event_start: rouletteSettings.event_start,
-          event_end: rouletteSettings.event_end,
-          start_time: rouletteSettings.start_time,
-          end_time: rouletteSettings.end_time,
-          daily_spins: rouletteSettings.daily_spins,
-        },
-      },
-      { headers: corsHeaders },
-    );
-  }
-  if (action === "spin") {
-    const { count, error: countError } = await supabase
-      .from("wjx_spins")
-      .select("id", { count: "exact", head: true })
-      .eq("telegram_id", telegramUserId)
-      .eq("spin_date", todayMoscow);
-
-    if (countError) {
-      console.error("Spin count failed:", countError.code);
-
-      return Response.json(
-        { success: false, error: "Could not check spins" },
-        { status: 500, headers: corsHeaders },
-      );
-    }
-
-    const spinsUsed = count ?? 0;
-
-    if (spinsUsed >= rouletteSettings.daily_spins) {
-      return Response.json(
-        {
-          success: false,
-          error: "Daily spin limit reached",
-          spinsUsed: spinsUsed,
-          spinsRemaining: 0,
-        },
-        {
-          status: 429,
-          headers: corsHeaders,
-        },
-      );
-    }
-
-    const prizeChances = await loadPrizeChances();
-    const selectedPrize = choosePrize(prizeChances);
-
-    const { data: spinData, error: spinError } = await supabase
-      .rpc("wjx_save_spin", {
-        p_telegram_id: telegramUserId,
-        p_spin_date: todayMoscow,
-        p_prize: selectedPrize ?? "Без выигрыша",
-      });
-
-    if (spinError) {
-      console.error("Spin save failed:", spinError.code);
-
-      return Response.json(
-        {
-          success: false,
-          error: spinError.code === "P0001"
-            ? "Daily spin limit reached"
-            : spinError.code === "P0002"
-            ? "Розыгрыш сейчас недоступен"
-            : "Could not save spin",
-        },
-        {
-          status: spinError.code === "P0001"
-            ? 429
-            : spinError.code === "P0002"
-            ? 403
-            : 500,
-          headers: corsHeaders,
-        },
-      );
-    }
-    return Response.json(
-      {
-        success: true,
-        spinNumber: spinData[0].spin_number,
-        spinsRemaining: spinData[0].spins_remaining,
-        prize: selectedPrize,
-      },
-      {
-        headers: corsHeaders,
-      },
     );
   }
 

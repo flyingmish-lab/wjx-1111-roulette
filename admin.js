@@ -38,8 +38,23 @@ function clearSession(text = "") {
   message(text);
 }
 
+async function fetchWithTimeout(url, options) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error("Сервер не ответил вовремя. Повторите запрос.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function callApi(endpoint, body, token = adminToken) {
-  const response = await fetch(apiBase + endpoint, {
+  const response = await fetchWithTimeout(apiBase + endpoint, {
     method: "POST",
     cache: "no-store",
     credentials: "omit",
@@ -201,7 +216,7 @@ byId("logoutButton").addEventListener("click", async () => {
   clearSession("Вы вышли из админ-панели.");
   if (!token) return;
   try {
-    const response = await fetch(apiBase + "wjx-admin-auth", {
+    const response = await fetchWithTimeout(apiBase + "wjx-admin-auth", {
       method: "POST",
       cache: "no-store",
       credentials: "omit",
@@ -432,6 +447,36 @@ async function showWinnerDetails(id) {
     const total = document.createElement("p");
     total.textContent = `Всего реальных призов: ${result.total_wins}`;
     panel.append(heading, identity, period, total);
+    const delivery = document.createElement("p");
+    delivery.textContent = `Выдано: ${
+      result.delivered_count ?? 0
+    } | Осталось выдать: ${result.remaining_count ?? result.total_wins}`;
+    panel.append(delivery);
+    for (const item of result.delivered_prizes ?? []) {
+      const line = document.createElement("p");
+      line.textContent = `Выдано: ${item.prize} × ${item.quantity}`;
+      panel.append(line);
+    }
+    if (result.can_deliver && result.remaining_count > 0) {
+      const issue = document.createElement("button");
+      issue.type = "button";
+      issue.textContent = "Отметить выдачу всех оставшихся призов";
+      issue.addEventListener("click", async () => {
+        issue.disabled = true;
+        try {
+          const saved = await adminApi("admin_mark_prizes_delivered", {
+            telegram_id: id,
+          });
+          message(`Отмечена выдача: ${saved.marked_count}.`);
+          if (version === winnerDetailVersion) await showWinnerDetails(id);
+        } catch (error) {
+          message(error.message);
+          if (version === winnerDetailVersion) issue.disabled = false;
+        }
+      });
+      panel.append(issue);
+    }
+
     for (
       const item of result.prizes.filter((item) => isWinningPrize(item.prize))
     ) {

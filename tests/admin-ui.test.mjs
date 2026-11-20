@@ -19,10 +19,11 @@ function setup({clockOffset=0}={}) {
     constructor(...args) {super(...(args.length?args:[Date.now()+clockOffset]));}
     static now() {return Date.now()+clockOffset;}
   };
-  w.setTimeout=(fn,delay)=>{expire=fn;expiryDelay=delay;return 1;};
+  const nativeTimeout=w.setTimeout.bind(w);
+  w.setTimeout=(fn,delay)=>{if(delay===3600000){expire=fn;expiryDelay=delay;return 99999;}return nativeTimeout(fn,delay);};
   w.fetch=async(url,options)=>{
     const body=JSON.parse(options.body); calls.push({url,body,headers:options.headers});
-    const req=new Request(url,options);
+    const req=new Request(url,{...options,signal:undefined});
     return url.endsWith('wjx-admin-auth')?auth(req):roulette(req);
   };
   w.sessionStorage.setItem('wjxAdminInitData','legacy');
@@ -140,4 +141,18 @@ test('winner nickname opens server totals for the event and skips empty outcomes
     await until(()=>ui.calls.some(c=>c.body.action==='admin_get_winners'&&c.body.search==='player'));
     assert.equal(ui.calls.some(c=>c.body.action==='admin_get_user_wins'&&c.body.telegram_id==='123456789'),true);
   } finally {ui.dom.window.close();}
+});
+
+test('admin marks delivery once and sees updated remaining prizes without changing winnings',async()=>{
+  const {w,el,db}=await setup();
+  try {
+    db.eventWinCount=3;db.canDeliver=true;
+    el('adminPassword').value='test-only-password';el('loginForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
+    await until(()=>el('statusMessage').textContent==='Настройки загружены.');
+    el('winnersList').querySelector('button').click();await until(()=>!el('winnerDetails').textContent.includes('Загружаем'));
+    const issue=el('winnerDetails').querySelector('button');assert.ok(issue);issue.click();
+    await until(()=>el('winnerDetails').textContent.includes('Осталось выдать: 0'));
+    assert.equal(el('winnerDetails').querySelector('button'),null);assert.equal(db.deliveries.get(123456789),3);
+    assert.match(el('winnerDetails').textContent,/Всего реальных призов: 3/);
+  } finally {w.close();}
 });

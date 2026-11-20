@@ -11,6 +11,8 @@ Telegram Mini App с рулеткой и отдельной браузерной
 
 Проверка реальных выигрышей участника и переход к менеджеру после окончания розыгрыша: [docs/WINNER_LOOKUP_REVIEW.md](docs/WINNER_LOOKUP_REVIEW.md).
 
+Подготовленные исправления сетевых сбоев, восстановление истории и учёт выдачи: [docs/RELIABILITY_RELEASE_REVIEW.md](docs/RELIABILITY_RELEASE_REVIEW.md).
+
 ## Проверка разработки
 
 Требуется Node.js 24. Зависимости предназначены для разработки, на GitHub Pages сборка не нужна.
