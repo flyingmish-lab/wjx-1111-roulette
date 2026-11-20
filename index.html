@@ -732,7 +732,7 @@ background-attachment: fixed;
 
   </section>
 
-  <section style="margin:16px;padding:16px;background:#fff4d5;border-radius:12px" aria-live="polite">
+  <section id="gameStatusPanel" style="margin:16px;padding:16px;background:#fff4d5;border-radius:12px" aria-live="polite">
     <p id="connectionNote" role="status">Загружаем игру…</p>
     <button id="retryLoadButton" type="button" hidden>Повторить загрузку</button>
     <button id="recoverSpinButton" type="button" hidden>Проверить результат</button>
@@ -811,6 +811,9 @@ function savePending() {
 }
 function note(text) {
   byId("connectionNote").textContent = text;
+  byId("connectionNote").hidden = !text;
+  byId("gameStatusPanel").hidden =
+    !text && !byId("lastSpinResult").textContent && !pending;
 }
 function serverNow() {
   return serverAnchor + Math.max(0, performance.now() - performanceAnchor);
@@ -1000,7 +1003,7 @@ async function loadServerStatus() {
       note(
         pending
           ? "Результат прокрутки ещё не подтверждён. Нажмите «Проверить результат» — новая попытка не будет потрачена."
-          : "Состояние игры обновлено.",
+          : "",
       );
       byId("retryLoadButton").hidden = true;
     } catch (error) {
