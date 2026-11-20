@@ -10,6 +10,7 @@ import { requireAdmin } from "../_shared/admin-session.ts";
 import {
   botConnectionStatus,
   configureTelegramBot,
+  TelegramServiceError,
 } from "../_shared/telegram-bot.ts";
 const telegramBotToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -370,7 +371,7 @@ async function roulette(req: Request): Promise<Response> {
             success: false,
             error: error.code === "P0001"
               ? (isTest
-                ? "Тестовые попытки закончились"
+                ? "Доступные прокрутки закончились"
                 : "На сегодня лимит попыток исчерпан")
               : error.code === "P0002"
               ? "Розыгрыш сейчас недоступен"
@@ -652,6 +653,9 @@ export async function handleRoulette(req: Request): Promise<Response> {
   try {
     return await roulette(req);
   } catch (error) {
+    if (error instanceof TelegramServiceError) {
+      return json({ success: false, error: error.message }, 503);
+    }
     return failure(error);
   }
 }

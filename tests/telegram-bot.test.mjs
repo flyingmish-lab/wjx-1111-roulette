@@ -77,6 +77,8 @@ test('only a browser admin can configure commands; existing webhook is never sil
   const s=await issueSession(env.WJX_ADMIN_PASSWORD,env.WJX_ADMIN_SESSION_SECRET);db.sessions.set(s.tokenHash,{expires_at:s.expiresAt});
   const status=await roulette(request({action:'admin_bot_status'},s.token));assert.equal(status.status,200);assert.equal((await status.json()).connected,false);
   const configured=await roulette(request({action:'admin_configure_bot'},s.token));assert.equal(configured.status,200);
+  const names=fake.calls.filter(c=>c.method==='setMyName');
+  assert.deepEqual(names.map(c=>c.body),[{name:'WJX Рулетка',language_code:''},{name:'WJX Рулетка',language_code:'ru'}]);
   const commands=fake.calls.filter(c=>c.method==='setMyCommands');assert.equal(commands.length,4);assert.deepEqual(commands[0].body.commands,BOT_COMMANDS);
   const webhook=fake.calls.find(c=>c.method==='setWebhook');assert.equal(webhook.body.url,env.SUPABASE_URL+'/functions/v1/wjx-telegram-bot');
   assert.equal(webhook.body.drop_pending_updates,false);assert.deepEqual(webhook.body.allowed_updates,['message']);
@@ -90,4 +92,18 @@ test('flattened bot build authenticates and replies exactly like source',async()
   const p=await setup('dashboard-dist/wjx-telegram-bot/index.ts');
   const reply=await (await p.send(p.body('/play'))).json();assert.equal(reply.reply_markup.inline_keyboard[0][0].web_app.url,MINI_APP_URL);
   assert.equal((await p.send(p.body('/rules'),'forged')).status,401);
+});
+
+test('admin connection diagnostics never expose upstream errors or bot credentials',async()=>{
+  const db=mockDb();const s=await issueSession(env.WJX_ADMIN_PASSWORD,env.WJX_ADMIN_SESSION_SECRET);db.sessions.set(s.tokenHash,{expires_at:s.expiresAt});
+  for(const mode of ['http','network']) {
+    const fetch=async()=>{
+      if(mode==='network')throw Error('https://api.telegram.org/bot'+env.TELEGRAM_BOT_TOKEN);
+      return Response.json({ok:false,error_code:500,description:'private upstream details'},{status:500});
+    };
+    const roulette=loadFunction('supabase/functions/wjx-roulette/index.ts',db,env,{fetch}).handleRoulette;
+    const response=await roulette(request({action:'admin_bot_status'},s.token));assert.equal(response.status,503);
+    const data=await response.json();assert.equal(data.error.includes(env.TELEGRAM_BOT_TOKEN),false);assert.equal(data.error.includes('private upstream details'),false);
+    assert.match(data.error,mode==='http'?/код 500/:/Не удалось получить ответ/);
+  }
 });

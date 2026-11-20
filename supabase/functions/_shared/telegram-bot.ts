@@ -1,11 +1,12 @@
+export class TelegramServiceError extends Error {}
 export const MINI_APP_URL =
   "https://flyingmish-lab.github.io/wjx-1111-roulette/";
 export const MANAGER_URL = "https://t.me/Wjx_wjxx";
 export const BOT_COMMANDS = [
-  { command: "start", description: "🎰 Запустить рулетку WJX 11.11" },
+  { command: "start", description: "🎰 WJX Рулетка — играть" },
   { command: "play", description: "🎰 Крутить рулетку" },
   { command: "prizes", description: "🎁 Мои выигрыши и подарки" },
-  { command: "rules", description: "📜 Правила розыгрыша WJX 11.11" },
+  { command: "rules", description: "📜 Правила WJX Рулетка" },
   { command: "help", description: "💬 Помощь и поддержка WJX" },
 ];
 
@@ -36,7 +37,11 @@ export async function telegramRequest(
   method: string,
   body: Record<string, unknown> = {},
 ) {
-  if (!token) throw new Error("Bot configuration missing");
+  if (!token) {
+    throw new TelegramServiceError(
+      "В Supabase не настроен TELEGRAM_BOT_TOKEN.",
+    );
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10000);
   try {
@@ -50,17 +55,31 @@ export async function telegramRequest(
       },
     );
     const data = await response.json();
-    if (!response.ok || !data.ok) throw new Error("Telegram unavailable");
+    if (!response.ok || !data.ok) {
+      const code = Number(data.error_code) || response.status;
+      throw new TelegramServiceError(
+        code === 401 || code === 404
+          ? "Telegram отклонил токен бота. Проверьте TELEGRAM_BOT_TOKEN в Supabase."
+          : `Telegram временно недоступен (код ${code}). Повторите позже.`,
+      );
+    }
     return data.result;
-  } catch {
-    throw new Error("Telegram unavailable");
+  } catch (error) {
+    if (error instanceof TelegramServiceError) throw error;
+    throw new TelegramServiceError(
+      "Не удалось получить ответ от Telegram. Повторите позже.",
+    );
   } finally {
     clearTimeout(timer);
   }
 }
 export function telegramWebhookUrl(supabaseUrl: string) {
   const url = new URL(supabaseUrl);
-  if (url.protocol !== "https:") throw new Error("Invalid bot URL");
+  if (url.protocol !== "https:") {
+    throw new TelegramServiceError(
+      "Для Telegram нужен публичный HTTPS-адрес Supabase.",
+    );
+  }
   return `${url.origin}/functions/v1/wjx-telegram-bot`;
 }
 export async function botConnectionStatus(token: string, supabaseUrl: string) {
@@ -83,6 +102,13 @@ export async function configureTelegramBot(
   if (status.otherWebhook) return { conflict: true };
   const secretToken = await telegramWebhookSecret(secret, token);
   const identity = await telegramRequest(token, "getMe");
+  // Update the public display name without changing the username or links.
+  for (const language_code of ["", "ru"]) {
+    await telegramRequest(token, "setMyName", {
+      name: "WJX Рулетка",
+      language_code,
+    });
+  }
   // Default and private-chat scopes cover both existing and new users.
   for (const scope of [{ type: "default" }, { type: "all_private_chats" }]) {
     for (const language_code of ["", "ru"]) {

@@ -16,7 +16,7 @@ const botDb = createClient(
 const openGame = { text: "🎰 Открыть рулетку", web_app: { url: MINI_APP_URL } };
 const support = { text: "💬 Написать менеджеру", url: MANAGER_URL };
 const menuText =
-  "Команды WJX 11.11:\n/start — открыть рулетку\n/play — играть в Mini App\n/prizes — мои реальные призы\n/rules — даты и правила\n/help — помощь";
+  "Команды WJX Рулетка:\n/start — открыть рулетку\n/play — играть в Mini App\n/prizes — мои реальные призы\n/rules — даты и правила\n/help — помощь";
 function botReply(
   chat: number,
   text: string,
@@ -67,7 +67,7 @@ export async function handleTelegramBot(req: Request): Promise<Response> {
     if (command === "start") {
       return botReply(
         user.id,
-        "🎰 Добро пожаловать в WJX 11.11!\nОткройте рулетку кнопкой ниже. Попытки и выигрыши сохраняются на сервере.\n\n" +
+        "🎰 Добро пожаловать в WJX Рулетка!\nОткройте рулетку кнопкой ниже. Попытки и выигрыши сохраняются на сервере.\n\n" +
           menuText,
       );
     }
@@ -94,13 +94,13 @@ export async function handleTelegramBot(req: Request): Promise<Response> {
       if (error || !settings) throw new Error("Rules unavailable");
       return botReply(
         user.id,
-        `📜 Правила WJX 11.11\n\nНачало: ${
+        `📜 Правила WJX Рулетка\n\nНачало: ${
           displayDate(settings.event_start)
         } в ${settings.start_time.slice(0, 5)} МСК.\nОкончание: ${
           displayDate(settings.event_end)
         } в ${
           settings.end_time.slice(0, 5)
-        } МСК.\nЭто единый период; в промежуточные дни игра доступна и ночью.\n\nПопыток в день: ${settings.daily_spins}. Новый день начинается в 00:00 МСК. Неиспользованные попытки не переносятся.\nРезультат случайный; возможен исход без выигрыша.\nТестовые попытки не дают реальных призов и не расходуют обычные попытки.\nПосле окончания розыгрыша победители обращаются к менеджеру. Выигрыши проверяются по базе, а не по скриншоту.`,
+        } МСК.\nЭто единый период; в промежуточные дни игра доступна и ночью.\n\nПопыток в день: ${settings.daily_spins}. Новый день начинается в 00:00 МСК. Неиспользованные попытки не переносятся.\nРезультат случайный; возможен исход без выигрыша.\nПосле окончания розыгрыша победители обращаются к менеджеру. Выигрыши проверяются по базе, а не по скриншоту.`,
       );
     }
     if (command === "prizes") {
@@ -125,7 +125,7 @@ export async function handleTelegramBot(req: Request): Promise<Response> {
       if (!items.length) {
         return botReply(
           user.id,
-          `🎁 Мои призы\nПериод: ${period}.\n\nРеальных выигрышей за этот период пока нет. Тестовые результаты сюда не входят.`,
+          `🎁 Мои призы\nПериод: ${period}.\n\nРеальных выигрышей за этот период пока нет.`,
         );
       }
       const lines = items.map((p: { prize: string; quantity: number }) =>
@@ -139,7 +139,7 @@ export async function handleTelegramBot(req: Request): Promise<Response> {
           summary.delivered_count ?? 0
         }. Осталось выдать: ${
           summary.remaining_count ?? summary.total_wins
-        }.\n\nПосле окончания розыгрыша свяжитесь с менеджером. Тестовые результаты и «Без выигрыша» в список не включены.`,
+        }.\n\nПосле окончания розыгрыша свяжитесь с менеджером. Исходы «Без выигрыша» в список не включены.`,
       );
     }
     return botReply(user.id, "Неизвестная команда.\n\n" + menuText);

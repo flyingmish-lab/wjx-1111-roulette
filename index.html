@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WJX 11.11 — Рулетка подарков</title>
+<title>WJX Рулетка</title>
 
 <style>
   * { box-sizing: border-box; }
@@ -334,11 +334,6 @@ background-attachment: fixed;
   display: none;
 }
 
-/* The original game uses the lever; the separate test button must stay visible. */
-#testSpinButton {
-  display: block;
-  margin-top: 12px;
-}
 
 .lever {
   right: -8cqw;
@@ -663,7 +658,7 @@ background-attachment: fixed;
   <div class="stars">✦ ✧ ✦</div>
   <div class="eyebrow">ПРАЗДНИЧНАЯ АКЦИЯ</div>
 
-  <h1>WJX 11.11</h1>
+  <h1>WJX Рулетка</h1>
   <div class="subtitle">Рулетка подарков 🎁</div>
 
  
@@ -674,7 +669,7 @@ background-attachment: fixed;
 
 
   <div class="marquee-brand">✦ WJX ✦</div>
-  <div class="marquee-event">11.11 SPECIAL EVENT</div>
+  <div class="marquee-event">РУЛЕТКА ПОДАРКОВ</div>
 </div>
 
   <div class="machine-title">✦ ПОЙМАЙ СВОЮ УДАЧУ ✦</div>
@@ -683,7 +678,6 @@ background-attachment: fixed;
 <div id="finishedMessage" style="display: none;">
   РОЗЫГРЫШ ОКОНЧЕН!
 </div>
-<p id="playModeNote" hidden style="padding:10px;background:#fff4d5;color:#5a321e;border-radius:10px;text-align:center;font-weight:bold" role="status">🧪 ТЕСТОВЫЙ РЕЖИМ — БЕЗ ВЫДАЧИ ПРИЗОВ</p>
 <div class="reels">
   <div class="reel"><div class="reel-strip"></div></div>
   <div class="reel"><div class="reel-strip"></div></div>
@@ -738,15 +732,6 @@ background-attachment: fixed;
 
   </section>
 
-  <section id="testPlayPanel" hidden style="margin:16px;padding:16px;background:#fff4d5;border-radius:12px">
-  <strong>Тестирование — без выдачи призов</strong>
-  <p id="testBalanceNote"></p>
-  <label for="testModeToggle" style="display:block;margin-bottom:12px">
-    <input id="testModeToggle" type="checkbox"> Тестовый режим рычага — без выдачи призов
-  </label>
-  <button id="testSpinButton" class="spin" type="button">Тестовая прокрутка</button>
-  <p id="testSpinResult" role="status"></p>
-</section>
   <section style="margin:16px;padding:16px;background:#fff4d5;border-radius:12px" aria-live="polite">
     <p id="connectionNote" role="status">Загружаем игру…</p>
     <button id="retryLoadButton" type="button" hidden>Повторить загрузку</button>
@@ -767,7 +752,6 @@ background-attachment: fixed;
 const reels = [...document.querySelectorAll(".reel")];
 const button = document.getElementById("spinButton");
 const lever = document.getElementById("leverButton");
-const testSpinButton = document.getElementById("testSpinButton");
 const byId = (id) => document.getElementById(id);
 const symbols = [
   "приз картридж.webp",
@@ -898,23 +882,9 @@ function render() {
       state?.eventSummary.total_wins > 0
       ? "block"
       : "none";
-  const testRemaining = state?.testRemaining || 0;
-  byId("testPlayPanel").hidden = testRemaining <= 0 && testLeverMode === null &&
-    !byId("testSpinResult").textContent;
-  byId("testModeToggle").checked = testing;
-  byId("testModeToggle").disabled = spinning || !!pending;
-  byId("playModeNote").hidden = !testing;
-  byId("testBalanceNote").textContent =
-    `Осталось тестовых попыток: ${testRemaining}. Они не расходуют реальные попытки.`;
-  lever.setAttribute(
-    "aria-label",
-    testing
-      ? "Тестовая прокрутка рычагом — без выдачи призов"
-      : "Потянуть рычаг",
-  );
+  lever.setAttribute("aria-label", "Потянуть рычаг");
   lever.disabled = spinning || !serverStatusLoaded || !!pending;
   button.disabled = lever.disabled;
-  testSpinButton.disabled = lever.disabled || testRemaining <= 0;
   byId("retryLoadButton").disabled = spinning;
   byId("recoverSpinButton").hidden = !pending;
   byId("recoverSpinButton").disabled = spinning;
@@ -972,8 +942,7 @@ function showResult(result, recovered = false) {
     result.spinDate.split("-").reverse().join(".")
   }: ${prizeLabel(result.prize)}`;
   if (result.isTest) {
-    byId("testSpinResult").textContent =
-      `Тестовый ${text.toLowerCase()}. Приз не выдаётся.`;
+    byId("lastSpinResult").textContent = "Прокрутка завершена.";
   } else byId("lastSpinResult").textContent = text;
 }
 async function api(body) {
@@ -1070,8 +1039,7 @@ async function playSpin(isTest = false, recover = false) {
       return;
     }
     if (isTest && state.testRemaining <= 0) {
-      byId("testSpinResult").textContent =
-        "Тестовые попытки закончились. Для реальной игры выключите тестовый режим рычага.";
+      byId("lastSpinResult").textContent = "Доступные прокрутки закончились.";
       return;
     }
     pending = { operationId: newOperationId(), isTest };
@@ -1131,16 +1099,7 @@ async function playSpin(isTest = false, recover = false) {
     render();
   }
 }
-button.addEventListener("click", () => playSpin(false));
-testSpinButton.addEventListener("click", () => {
-  testLeverMode = true;
-  render();
-  playSpin(true);
-});
-byId("testModeToggle").addEventListener("change", (event) => {
-  testLeverMode = event.target.checked;
-  render();
-});
+button.addEventListener("click", () => playSpin(testLeverMode === true));
 lever.addEventListener("click", () => {
   if (spinning || lever.disabled) return;
   lever.classList.remove("pulling");

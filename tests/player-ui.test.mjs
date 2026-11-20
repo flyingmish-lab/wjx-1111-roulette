@@ -25,67 +25,53 @@ async function setupPlayer({attempts=1,eventStart='2099-01-01',eventEnd='2099-12
   const releaseLever=()=>w.document.querySelector('.lever-stick').dispatchEvent(new w.Event('animationend',{bubbles:true}));
   return {db,dom,w,el,alerts,calls,releaseLever};
 }
-test('test button is visible and spends only allocated tests before event dates',async()=>{
+test('assigned attempts work through the lever without public testing controls or balances',async()=>{
   const {db,w,el,alerts,calls}=await setupPlayer();
   try {
-    assert.equal(el('testPlayPanel').hidden,false);
-    assert.notEqual(w.getComputedStyle(el('testSpinButton')).display,'none');
-    assert.equal(el('playModeNote').hidden,false);
-    assert.equal(el('testModeToggle').checked,true);
-    el('testSpinButton').click();
-    await until(()=>el('testSpinResult').textContent.length>0&&!el('spinButton').disabled);
-    assert.match(el('testSpinResult').textContent,/Приз не выдаётся/);
-    assert.match(el('testBalanceNote').textContent,/попыток: 0/);
-    assert.equal(el('testSpinButton').disabled,true);
-    assert.equal(w.localStorage.getItem('wjxSpins'),null);
-    assert.equal(w.localStorage.getItem('wjxEventHistory'),null);
+    for(const id of ['testPlayPanel','testSpinButton','playModeNote','testModeToggle','testBalanceNote','testSpinResult'])assert.equal(el(id),null);
+    assert.doesNotMatch(w.document.body.textContent,/тестов|тестирован/i);
+    assert.equal(el('leverButton').getAttribute('aria-label'),'Потянуть рычаг');
+    el('leverButton').click();
+    await until(()=>el('lastSpinResult').textContent==='Прокрутка завершена.'&&!el('spinButton').disabled);
     assert.equal(db.balances.get(123456789),0);
     assert.equal(calls.filter(c=>c.action==='test_spin').length,1);
     assert.equal(calls.filter(c=>c.action==='spin').length,0);
+    assert.equal(w.localStorage.getItem('wjxEventHistory'),null);
     assert.equal(alerts.length,0);
   } finally {w.close();}
 });
-test('lever uses assigned tests before event dates without a schedule rejection',async()=>{
+test('assigned attempts bypass the future schedule without a public mode notice',async()=>{
   const {w,el,alerts,calls}=await setupPlayer();try {
     el('leverButton').click();
-    await until(()=>el('testSpinResult').textContent.includes('Приз не выдаётся')&&!el('spinButton').disabled);
+    await until(()=>el('lastSpinResult').textContent==='Прокрутка завершена.');
     assert.equal(calls.filter(c=>c.action==='test_spin').length,1);
-    assert.equal(calls.filter(c=>c.action==='spin').length,0);
     assert.equal(alerts.length,0);
-    assert.equal(w.localStorage.getItem('wjxEventHistory'),null);
   } finally {w.close();}
 });
-test('exhausted tests never fall through to real spins; real mode requires an explicit switch',async()=>{
+test('exhausted assigned attempts never silently spend real attempts',async()=>{
   const {w,el,calls,releaseLever}=await setupPlayer({eventStart:'2000-01-01'});try {
     el('leverButton').click();
-    await until(()=>el('testSpinResult').textContent.includes('Приз не выдаётся')&&!el('spinButton').disabled);
+    await until(()=>el('lastSpinResult').textContent==='Прокрутка завершена.'&&!el('spinButton').disabled);
     releaseLever();el('leverButton').click();
-    await until(()=>el('testSpinResult').textContent.includes('закончились'));
-    assert.equal(el('testModeToggle').checked,true);
+    await until(()=>el('lastSpinResult').textContent.includes('закончились'));
     assert.equal(calls.filter(c=>c.action==='test_spin').length,1);
     assert.equal(calls.filter(c=>c.action==='spin').length,0);
-    releaseLever();el('testModeToggle').checked=false;
-    el('testModeToggle').dispatchEvent(new w.Event('change',{bubbles:true}));
-    assert.equal(el('playModeNote').hidden,true);
-    el('leverButton').click();
-    await until(()=>el('lastSpinResult').textContent.includes('Результат'));
-    assert.equal(calls.filter(c=>c.action==='spin').length,1);
+    assert.doesNotMatch(w.document.body.textContent,/тестов|тестирован/i);
   } finally {w.close();}
 });
-test('assigned tests keep the lever and reels usable after the real event ends',async()=>{
+test('assigned attempts keep the lever usable after the event ends',async()=>{
   const {w,el,alerts,calls}=await setupPlayer({eventStart:'2000-01-01',eventEnd:'2001-01-01'});try {
     assert.notEqual(w.getComputedStyle(el('leverButton')).display,'none');
     assert.notEqual(w.getComputedStyle(w.document.querySelector('.reels')).display,'none');
     el('leverButton').click();
-    await until(()=>el('testSpinResult').textContent.includes('Приз не выдаётся'));
+    await until(()=>el('lastSpinResult').textContent==='Прокрутка завершена.');
     assert.equal(calls.filter(c=>c.action==='test_spin').length,1);
     assert.equal(alerts.length,0);
   } finally {w.close();}
 });
-test('unassigned users keep the real schedule and cannot activate testing',async()=>{
+test('unassigned users retain the real schedule',async()=>{
   const {w,el,alerts,calls}=await setupPlayer({attempts:0});try {
-    assert.equal(el('testPlayPanel').hidden,true);
-    assert.equal(el('playModeNote').hidden,true);
+    assert.equal(el('testPlayPanel'),null);
     el('leverButton').click();
     await until(()=>alerts.length>0);
     assert.match(alerts[0],/Розыгрыш начнётся/);
