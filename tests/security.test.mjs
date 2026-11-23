@@ -55,7 +55,7 @@ test('database outages and missing configuration fail closed',async()=>{
 test('every admin API rejects Telegram-only, unsigned, expired and revoked sessions',async()=>{
   const {db,s,roulette}=await setup();
   const owner=await telegramData(221535678);
-  for(const action of ['admin_get_settings','admin_save_settings','admin_get_prizes','admin_save_prize_chances','admin_test_users','admin_set_test_spins','admin_get_winners','admin_get_user_wins','admin_mark_prizes_delivered','admin_bot_status','admin_configure_bot']) {
+  for(const action of ['admin_get_settings','admin_save_settings','admin_get_prizes','admin_save_prize_chances','admin_test_users','admin_set_test_spins','admin_get_winners','admin_get_user_wins','admin_mark_prizes_delivered','admin_bot_status','admin_configure_bot','admin_set_pause','admin_subscription_status']) {
     const before=db.calls.length;
     assert.equal((await roulette(request({action,initData:owner}))).status,401);
     assert.equal(db.calls.length,before,'no DB access before authentication');

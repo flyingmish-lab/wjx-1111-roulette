@@ -202,3 +202,47 @@ test('reliability: older WebViews without randomUUID still generate cryptographi
     assert.equal(p.db.operations.size,1);
   } finally {p.w.close();}
 });
+
+test('subscription prompt opens only the official channel and checking never spends an attempt',async()=>{
+  const p=await setupPlayer({prepare:({db})=>{db.subscribed=false;}});
+  const opened=[];p.w.Telegram.WebApp.openTelegramLink=url=>opened.push(url);
+  try {
+    p.el('leverButton').click();
+    await until(()=>!p.el('subscriptionPanel').hidden&&!p.el('spinButton').disabled);
+    assert.equal(p.db.operations.size,0);assert.equal(p.db.balances.get(123456789),1);
+    p.el('subscribeButton').click();assert.deepEqual(opened,['https://t.me/tattoowjxrussia']);
+    p.el('checkSubscriptionButton').click();
+    await until(()=>p.el('subscriptionNote').textContent.includes('не найдена')&&!p.el('checkSubscriptionButton').disabled);
+    assert.equal(p.db.operations.size,0);
+    p.db.subscribed=true;p.el('checkSubscriptionButton').click();
+    await until(()=>p.el('subscriptionPanel').hidden&&!p.el('checkSubscriptionButton').disabled);
+    assert.equal(p.db.operations.size,0);
+    p.releaseLever();p.el('leverButton').click();
+    await until(()=>p.db.operations.size===1&&!p.el('spinButton').disabled);
+    assert.equal(p.db.balances.get(123456789),0);
+  } finally {p.w.close();}
+});
+test('paused game disables new spins and preserves access to existing prizes',async()=>{
+  const p=await setupPlayer({attempts:0,eventStart:'2000-01-01',eventEnd:'2001-01-01',eventWinCount:2,prepare:({db})=>{db.settings.spins_paused=true;}});
+  try {
+    assert.equal(p.el('pauseNotice').hidden,false);assert.equal(p.el('leverButton').disabled,true);
+    assert.equal(p.el('myPrizesPanel').hidden,false);
+    assert.equal(p.w.getComputedStyle(p.el('claimPrizeButton')).display,'block');
+  } finally {p.w.close();}
+});
+test('polling backs off when idle and refreshes on return without querying Telegram membership',async()=>{
+  const timers=[];let visible=true;
+  const p=await setupPlayer({attempts:0,prepare:({w})=>{
+    Object.defineProperty(w.document,'hidden',{get:()=>!visible,configurable:true});
+    const realTimeout=w.setTimeout.bind(w);
+    w.setTimeout=(fn,ms,...args)=>{if(ms>=60000){timers.push({fn,ms});return 999;}return realTimeout(fn,ms,...args);};
+  }});
+  try {
+    await until(()=>timers.length>0);assert.ok(timers.at(-1).ms>=300000&&timers.at(-1).ms<=345000);
+    const before=p.calls.length;visible=false;p.w.document.dispatchEvent(new p.w.Event('visibilitychange'));
+    assert.equal(p.calls.length,before);
+    visible=true;p.w.document.dispatchEvent(new p.w.Event('visibilitychange'));
+    await until(()=>p.calls.length>before&&!p.el('spinButton').disabled);
+    assert.equal(p.calls.some(c=>c.action==='check_subscription'),false);
+  } finally {p.w.close();}
+});

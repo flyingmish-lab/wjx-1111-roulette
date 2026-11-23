@@ -10,6 +10,9 @@ import { requireAdmin } from "../_shared/admin-session.ts";
 import {
   botConnectionStatus,
   configureTelegramBot,
+  isChannelSubscriber,
+  REQUIRED_CHANNEL_URL,
+  subscriptionSetupStatus,
   TelegramServiceError,
 } from "../_shared/telegram-bot.ts";
 const telegramBotToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
@@ -135,6 +138,8 @@ async function roulette(req: Request): Promise<Response> {
   const action = requestData.action || "register";
   const adminActions = [
     "admin_bot_status",
+    "admin_set_pause",
+    "admin_subscription_status",
     "admin_configure_bot",
     "admin_mark_prizes_delivered",
     "admin_get_winners",
@@ -148,7 +153,14 @@ async function roulette(req: Request): Promise<Response> {
   ];
   const isAdminAction = adminActions.includes(action);
   if (
-    !["register", "spin", "test_spin", "status", ...adminActions].includes(
+    ![
+      "register",
+      "spin",
+      "test_spin",
+      "status",
+      "check_subscription",
+      ...adminActions,
+    ].includes(
       action,
     )
   ) {
@@ -169,6 +181,12 @@ async function roulette(req: Request): Promise<Response> {
         401,
       );
     }
+  }
+  if (action === "admin_subscription_status") {
+    return json({
+      success: true,
+      ...await subscriptionSetupStatus(telegramBotToken ?? ""),
+    });
   }
   if (action === "admin_bot_status") {
     return json({
@@ -286,16 +304,14 @@ async function roulette(req: Request): Promise<Response> {
       );
     }
 
-    const { error: participantError } = await supabase
-      .from("wjx_participants")
-      .upsert(
-        {
-          telegram_id: telegramUserId,
-          first_name: telegramUser.first_name || null,
-          username: telegramUser.username || null,
-        },
-        { onConflict: "telegram_id" },
-      );
+    const { error: participantError } = await supabase.rpc(
+      "wjx_register_player",
+      {
+        p_telegram_id: telegramUserId,
+        p_first_name: telegramUser.first_name || null,
+        p_username: telegramUser.username || null,
+      },
+    );
 
     if (participantError) {
       console.error("Participant save failed:", participantError.code);
@@ -308,6 +324,17 @@ async function roulette(req: Request): Promise<Response> {
         },
       );
     }
+  }
+  if (action === "check_subscription") {
+    const subscribed = await isChannelSubscriber(
+      telegramBotToken ?? "",
+      telegramUserId,
+    );
+    return json({
+      success: true,
+      subscribed,
+      channelUrl: REQUIRED_CHANNEL_URL,
+    });
   }
   const operationId = requestData.operationId;
   const validOperationId = (value: unknown): value is string =>
@@ -358,6 +385,16 @@ async function roulette(req: Request): Promise<Response> {
     }
     let result = previous?.result;
     if (!previous) {
+      if (
+        !(await isChannelSubscriber(telegramBotToken ?? "", telegramUserId))
+      ) {
+        return json({
+          success: false,
+          code: "SUBSCRIPTION_REQUIRED",
+          error: "Чтобы крутить рулетку, подпишитесь на наш канал.",
+          channelUrl: REQUIRED_CHANNEL_URL,
+        }, 403);
+      }
       const selectedPrize = choosePrize(await loadPrizeChances());
       const { data, error } = await supabase.rpc("wjx_perform_spin", {
         p_telegram_id: telegramUserId,
@@ -366,17 +403,27 @@ async function roulette(req: Request): Promise<Response> {
         p_prize: selectedPrize ?? "Без выигрыша",
       });
       if (error) {
-        if (["P0001", "P0002", "22023"].includes(error.code)) {
-          return json({
-            success: false,
-            error: error.code === "P0001"
-              ? (isTest
-                ? "Доступные прокрутки закончились"
-                : "На сегодня лимит попыток исчерпан")
-              : error.code === "P0002"
-              ? "Розыгрыш сейчас недоступен"
-              : "Некорректная операция",
-          }, error.code === "P0001" ? 429 : error.code === "P0002" ? 403 : 400);
+        if (["P0001", "P0002", "P0003", "22023"].includes(error.code)) {
+          return json(
+            {
+              success: false,
+              code: error.code === "P0003" ? "SPINS_PAUSED" : undefined,
+              error: error.code === "P0003"
+                ? "Рулетка временно приостановлена. Попробуйте позже."
+                : error.code === "P0001"
+                ? (isTest
+                  ? "Доступные прокрутки закончились"
+                  : "На сегодня лимит попыток исчерпан")
+                : error.code === "P0002"
+                ? "Розыгрыш сейчас недоступен"
+                : "Некорректная операция",
+            },
+            error.code === "P0001"
+              ? 429
+              : ["P0002", "P0003"].includes(error.code)
+              ? 403
+              : 400,
+          );
         }
         throw new Error("Spin unavailable");
       }
@@ -566,6 +613,20 @@ async function roulette(req: Request): Promise<Response> {
     const { data, error } = await supabase.rpc("wjx_admin_prize_stats");
     if (error || !data) throw new Error("Statistics unavailable");
     return json({ success: true, ...data });
+  }
+
+  if (action === "admin_set_pause") {
+    if (typeof requestData.paused !== "boolean") {
+      return json(
+        { success: false, error: "Некорректное состояние паузы" },
+        400,
+      );
+    }
+    const { error } = await supabase.from(settingsTable).update({
+      spins_paused: requestData.paused,
+    }).eq("id", 1);
+    if (error) throw new Error("Pause update failed");
+    return json({ success: true, paused: requestData.paused });
   }
 
   if (action === "admin_get_settings") {

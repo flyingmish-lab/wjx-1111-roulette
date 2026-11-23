@@ -36,6 +36,7 @@ function clearSession(text = "") {
   byId("winnerDetails").replaceChildren();
   byId("winnerDetails").hidden = true;
   byId("botConnectionNote").textContent = "";
+  byId("channelAccessNote").textContent = "";
   message(text);
 }
 
@@ -126,6 +127,7 @@ async function loadSettings() {
   byId("startTime").value = settings.start_time.slice(0, 5);
   byId("endTime").value = settings.end_time.slice(0, 5);
   byId("dailySpins").value = settings.daily_spins;
+  byId("spinsPaused").checked = settings.spins_paused === true;
 }
 async function loadPrizes() {
   const result = await adminApi("admin_get_prizes");
@@ -565,6 +567,41 @@ byId("configureBotButton").addEventListener("click", async () => {
     }. Проверьте их в личном чате с ботом.`;
   } catch (error) {
     message(error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+byId("savePauseButton").addEventListener("click", async () => {
+  const button = byId("savePauseButton");
+  button.disabled = true;
+  try {
+    const result = await adminApi("admin_set_pause", {
+      paused: byId("spinsPaused").checked,
+    });
+    byId("spinsPaused").checked = result.paused;
+    message(
+      byId("spinsPaused").checked
+        ? "Новые прокрутки приостановлены."
+        : "Прокрутки возобновлены.",
+    );
+  } catch (error) {
+    message(error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+byId("checkChannelButton").addEventListener("click", async () => {
+  const button = byId("checkChannelButton");
+  button.disabled = true;
+  try {
+    const result = await adminApi("admin_subscription_status");
+    byId("channelAccessNote").textContent = result.ready
+      ? "Бот — администратор канала. Можно проверять подписки."
+      : "Добавьте бота администратором канала @tattoowjxrussia и повторите проверку.";
+  } catch (error) {
+    byId("channelAccessNote").textContent = error.message;
   } finally {
     button.disabled = false;
   }

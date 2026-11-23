@@ -121,7 +121,19 @@
           <button id="checkBotButton" type="button">Проверить подключение</button>
           <button id="configureBotButton" type="button" style="margin-top:12px">Подключить команды бота</button>
         </div>
+        <div class="card">
+          <h2>Проверка подписки</h2>
+          <p>Для прокруток нужна подписка на @tattoowjxrussia. Бот должен быть администратором этого канала.</p>
+          <button id="checkChannelButton" type="button">Проверить доступ бота к каналу</button>
+          <p id="channelAccessNote" role="status"></p>
+        </div>
         <fieldset id="settingsFields" style="border:0; padding:0" disabled>
+          <div class="card">
+            <h2>Пауза рулетки</h2>
+            <label><input id="spinsPaused" type="checkbox"> Приостановить новые прокрутки</label>
+            <p>История и проверка выигрышей остаются доступны. Даты и вероятности не меняются.</p>
+            <button id="savePauseButton" type="button">Применить паузу</button>
+          </div>
           <div class="card">
             <h2>Проверка выигрышей участника</h2>
             <p>Только реальные призы за даты розыгрыша. Ник — для поиска, Telegram ID — для точной проверки.</p>
@@ -225,6 +237,6 @@
       </section>
     </main>
 
-    <script src="admin.js?v=20261120-bot-commands" defer></script>
+    <script src="admin.js?v=20261120-launch-readiness" defer></script>
   </body>
 </html>

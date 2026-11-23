@@ -174,3 +174,15 @@ test('browser admin checks and connects bot commands without displaying credenti
     ui.click('logoutButton');assert.equal(ui.el('botConnectionNote').textContent,'');
   } finally {ui.w.close();}
 });
+
+test('admin pause applies separately without saving or resetting draft dates',async()=>{
+  const p=setup();try {
+    await p.login();
+    const original=p.db.settings.event_start;p.el('startDate').value='2027-01-01';p.el('spinsPaused').checked=true;p.click('savePauseButton');
+    await until(()=>!p.el('savePauseButton').disabled);
+    assert.equal(p.db.settings.spins_paused,true);assert.equal(p.db.settings.event_start,original);
+    assert.equal(p.el('startDate').value,'2027-01-01');
+    p.el('spinsPaused').checked=false;p.click('savePauseButton');await until(()=>!p.el('savePauseButton').disabled);
+    assert.equal(p.db.settings.spins_paused,false);
+  } finally {p.w.close();}
+});

@@ -6,13 +6,14 @@ import { webcrypto } from 'node:crypto';
 
 export const env = { SUPABASE_URL: 'https://test.invalid', SUPABASE_SERVICE_ROLE_KEY: 'test-service-role',
   TELEGRAM_BOT_TOKEN: 'test-bot-token', WJX_ADMIN_PASSWORD: 'test-only-password', WJX_ADMIN_SESSION_SECRET: 'test-only-session-secret-with-32-characters' };
-export const baseSettings = { event_start: '2000-01-01', event_end: '2099-12-31', start_time: '00:00:00', end_time: '23:59:00', daily_spins: 3 };
+export const baseSettings = { event_start: '2000-01-01', event_end: '2099-12-31', start_time: '00:00:00', end_time: '23:59:00', daily_spins: 3, spins_paused: false };
 export const prizes = ['Картридж', 'Расходники', 'Noir Blade', 'Soul Ink', 'Бандажка', 'Без выигрыша'].map((prize, i) => ({prize, chance: i === 5 ? 50 : 10}));
 
 export function mockDb() {
   const db = { sessions: new Map(), balances: new Map(), eventWinCount: 0, operations: new Map(), deliveries: new Map(), realSpinsUsed: 1, dailyHistory: [{prize:'Без выигрыша',spinNumber:1}], calls: [], attempts: 0, settings: {...baseSettings}, failLimiter: false, failSessions: false,
     async rpc(name, args) {
       db.calls.push({ rpc: name, args });
+      if (name === 'wjx_register_player') return {data:null};
       if (name === 'wjx_mark_prizes_delivered') {
         const old=db.deliveries.get(args.p_telegram_id)||0;db.deliveries.set(args.p_telegram_id,db.eventWinCount);
         return {data:{marked_count:db.eventWinCount-old}};
@@ -32,6 +33,7 @@ export function mockDb() {
         const key=args.p_telegram_id+':'+args.p_request_id;
         const old=db.operations.get(key);
         if(old) return old.is_test===args.p_is_test?{data:old.result}:{error:{code:'22023'}};
+        if(db.settings.spins_paused)return {error:{code:'P0003'}};
         const date=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(db.serverNow||Date.now()));
         let extra;
         if(args.p_is_test) {
@@ -106,7 +108,10 @@ export function loadFunction(entry, db, environment = env, runtime = {}) {
     const context={ exports, require(specifier) {
       if(specifier.startsWith('npm:')) return {createClient:()=>db};
       return load(path.resolve(path.dirname(filename),specifier));
-    }, Deno:{env:{get:key=>environment[key]},serve(){}}, Request,Response,Headers,TextEncoder,TextDecoder,URL,URLSearchParams,Date,crypto:webcrypto,console,setTimeout,clearTimeout,AbortController,...runtime };
+    }, Deno:{env:{get:key=>environment[key]},serve(){}}, Request,Response,Headers,TextEncoder,TextDecoder,URL,URLSearchParams,Date,crypto:webcrypto,console,setTimeout,clearTimeout,AbortController,fetch:async(url,options)=>{
+      if(!url.endsWith('/getChatMember'))throw Error('Unexpected test transport');
+      const args=JSON.parse(options.body);return Response.json({ok:true,result:{status:db.subscribed===false?'left':'member',user:{id:args.user_id}}});
+    },...runtime };
     vm.runInNewContext(code,context,{filename});
     return exports;
   }

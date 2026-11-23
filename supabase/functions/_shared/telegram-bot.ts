@@ -130,3 +130,44 @@ export async function configureTelegramBot(
   });
   return { conflict: false, username: identity.username, connected: true };
 }
+
+export const REQUIRED_CHANNEL = "@tattoowjxrussia";
+export const REQUIRED_CHANNEL_URL = "https://t.me/tattoowjxrussia";
+export async function isChannelSubscriber(token: string, userId: number) {
+  const member = await telegramRequest(token, "getChatMember", {
+    chat_id: REQUIRED_CHANNEL,
+    user_id: userId,
+  });
+  if (!member || member.user?.id !== userId) {
+    throw new TelegramServiceError(
+      "Не удалось проверить подписку. Повторите позже.",
+    );
+  }
+  if (["member", "administrator", "creator"].includes(member.status)) {
+    return true;
+  }
+  if (member.status === "restricted") return member.is_member === true;
+  if (["left", "kicked"].includes(member.status)) return false;
+  throw new TelegramServiceError(
+    "Не удалось проверить подписку. Повторите позже.",
+  );
+}
+
+export async function subscriptionSetupStatus(token: string) {
+  const bot = await telegramRequest(token, "getMe");
+  if (!Number.isSafeInteger(bot?.id)) {
+    throw new TelegramServiceError(
+      "Не удалось проверить доступ бота к каналу.",
+    );
+  }
+  const member = await telegramRequest(token, "getChatMember", {
+    chat_id: REQUIRED_CHANNEL,
+    user_id: bot.id,
+  });
+  return {
+    ready: member?.user?.id === bot.id &&
+      ["administrator", "creator"].includes(member.status),
+    channel: REQUIRED_CHANNEL,
+    botUsername: bot.username,
+  };
+}

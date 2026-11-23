@@ -732,6 +732,12 @@ background-attachment: fixed;
 
   </section>
 
+  <section id="subscriptionPanel" hidden style="margin:16px;padding:16px;background:#fff4d5;border-radius:12px">
+    <p id="subscriptionNote" role="status">Чтобы крутить рулетку, подпишитесь на наш официальный канал.</p>
+    <button id="subscribeButton" type="button">Открыть канал</button>
+    <button id="checkSubscriptionButton" type="button">Я подписался — проверить</button>
+  </section>
+  <p id="pauseNotice" hidden role="status">Рулетка временно приостановлена. Попробуйте позже. Ваши выигрыши сохранены.</p>
   <section id="gameStatusPanel" style="margin:16px;padding:16px;background:#fff4d5;border-radius:12px" aria-live="polite">
     <p id="connectionNote" role="status">Загружаем игру…</p>
     <button id="retryLoadButton" type="button" hidden>Повторить загрузку</button>
@@ -886,7 +892,8 @@ function render() {
       ? "block"
       : "none";
   lever.setAttribute("aria-label", "Потянуть рычаг");
-  lever.disabled = spinning || !serverStatusLoaded || !!pending;
+  byId("pauseNotice").hidden = !state?.settings.spins_paused;
+  lever.disabled = spinning || !serverStatusLoaded || !!pending || !!state?.settings.spins_paused;
   button.disabled = lever.disabled;
   byId("retryLoadButton").disabled = spinning;
   byId("recoverSpinButton").hidden = !pending;
@@ -967,6 +974,7 @@ async function api(body) {
           ? "Сессия Telegram истекла. Закройте и откройте Mini App заново."
           : result.error || "Сервис временно недоступен.",
       );
+      error.code = result.code;
       error.definitive = [400, 403, 409, 429].includes(response.status);
       error.needsReopen = response.status === 401;
       throw error;
@@ -1017,6 +1025,7 @@ async function loadServerStatus() {
     await refreshing;
   } finally {
     refreshing = null;
+    scheduleRefresh();
   }
 }
 async function playSpin(isTest = false, recover = false) {
@@ -1029,6 +1038,10 @@ async function playSpin(isTest = false, recover = false) {
   if (!pending) {
     if (!serverStatusLoaded) {
       await loadServerStatus();
+      return;
+    }
+    if (state.settings.spins_paused) {
+      note("Рулетка временно приостановлена. Попробуйте позже.");
       return;
     }
     if (!isTest && getEventStatus() !== "active") {
@@ -1061,6 +1074,7 @@ async function playSpin(isTest = false, recover = false) {
       result.operationId !== operation.operationId ||
       result.isTest !== operation.isTest
     ) throw Error("Не удалось подтвердить результат.");
+    byId("subscriptionPanel").hidden = true;
     // Show committed results before animation, without depending on optional storage.
     showResult(result, recover || result.replayed);
     pending = null;
@@ -1085,6 +1099,10 @@ async function playSpin(isTest = false, recover = false) {
       }
     }
   } catch (error) {
+    if (error.code === "SUBSCRIPTION_REQUIRED") {
+      byId("subscriptionPanel").hidden = false;
+      byId("subscriptionNote").textContent = "Чтобы крутить рулетку, подпишитесь на наш официальный канал.";
+    }
     if (error.definitive) {
       pending = null;
       savePending();
@@ -1100,6 +1118,7 @@ async function playSpin(isTest = false, recover = false) {
   } finally {
     spinning = false;
     render();
+    scheduleRefresh();
   }
 }
 button.addEventListener("click", () => playSpin(testLeverMode === true));
@@ -1134,9 +1153,43 @@ window.addEventListener("online", () => {
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && !spinning) loadServerStatus();
 });
-setInterval(() => {
-  if (!document.hidden && !spinning) loadServerStatus();
-}, 60000);
+let refreshTimer;
+function scheduleRefresh() {
+  clearTimeout(refreshTimer);
+  if (document.hidden || !telegramInitData) return;
+  const idle = state && !pending && !state.settings.spins_paused &&
+    (getEventStatus() !== "active" || (state.spinsRemaining <= 0 && !state.testRemaining));
+  let delay = (idle ? 300000 : 60000) * (1 + Math.random() * 0.15);
+  if (state) {
+    const today = getMoscowDate();
+    const midnight = Date.parse(today + "T00:00:00+03:00") + 86400000;
+    const starts = Date.parse(state.settings.event_start + "T" + state.settings.start_time.slice(0,5) + ":00+03:00");
+    for (const boundary of [midnight, starts]) {
+      if (boundary > serverNow()) delay = Math.min(delay, boundary - serverNow() + 1000);
+    }
+  }
+  refreshTimer = setTimeout(async () => {
+    if (!spinning) await loadServerStatus();
+    scheduleRefresh();
+  }, Math.max(1000, delay));
+}
+document.addEventListener("visibilitychange", scheduleRefresh);
+byId("subscribeButton").addEventListener("click", () => {
+  const url = "https://t.me/tattoowjxrussia";
+  if (window.Telegram?.WebApp?.openTelegramLink) window.Telegram.WebApp.openTelegramLink(url);
+  else window.open(url,"_blank","noopener,noreferrer");
+});
+byId("checkSubscriptionButton").addEventListener("click", async () => {
+  const check = byId("checkSubscriptionButton"); check.disabled = true;
+  try {
+    const result = await api({action:"check_subscription"});
+    byId("subscriptionNote").textContent = result.subscribed
+      ? "Подписка подтверждена. Можно крутить рулетку."
+      : "Подписка пока не найдена. Подпишитесь на канал и повторите проверку.";
+    if (result.subscribed) {byId("subscriptionPanel").hidden=true; await loadServerStatus();}
+  } catch (error) {byId("subscriptionNote").textContent=error.message;}
+  finally {check.disabled=false;}
+});
 render();
 loadServerStatus();
 
