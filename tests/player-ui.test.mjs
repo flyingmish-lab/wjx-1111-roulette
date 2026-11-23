@@ -350,3 +350,39 @@ test('player refreshes restored real attempts without reopening or spending a sp
   assert.equal(p.calls.some(c=>c.action==='spin'),false);
  }finally{p.w.close();}
 });
+
+
+for (const failedReel of [false, true]) test(`winning text and history wait for the last reel, including animation failure: ${failedReel}`,async()=>{
+  const animations=[];
+  const p=await setupPlayer({prepare:({w,db})=>{
+    db.prizes=db.prizes.map(prize=>({...prize,chance:prize.prize==='Мерч WJX'?100:0}));
+    w.HTMLElement.prototype.animate=()=>{
+      let resolve,reject;
+      const finished=new Promise((yes,no)=>{resolve=yes;reject=no;});
+      animations.push({resolve,reject});
+      return {finished,cancel(){}};
+    };
+  }});
+  try {
+    const history=p.el('prizeResult').textContent;
+    const prizes=p.el('myPrizes').textContent;
+    p.el('lastSpinResult').textContent='Предыдущий результат';
+    p.el('leverButton').click();await until(()=>animations.length===4);
+    assert.equal(p.db.operations.size,1,'server has already committed the spin');
+    assert.equal(p.el('lastSpinResult').textContent,'');
+    assert.equal(p.el('prizeResult').textContent,history);
+    assert.equal(p.el('myPrizes').textContent,prizes);
+    assert.ok(p.w.localStorage.getItem('wjxPendingSpin:123456789'),'reload can recover during animation');
+    if(failedReel)animations[0].reject(Error('animation unavailable'));else animations[0].resolve();
+    animations[1].resolve();animations[2].resolve();
+    await new Promise(resolve=>setTimeout(resolve,20));
+    assert.equal(p.el('lastSpinResult').textContent,'');
+    assert.equal(p.el('prizeResult').textContent,history);
+    assert.equal(p.el('leverButton').disabled,true);
+    animations[3].resolve();
+    await until(()=>p.el('lastSpinResult').textContent.includes('Мерч WJX'));
+    assert.match(p.el('prizeResult').textContent,/Мерч WJX/);
+    assert.equal(p.w.localStorage.getItem('wjxPendingSpin:123456789'),null);
+    assert.equal(p.calls.filter(call=>call.action==='spin').length,1);
+  }finally{p.w.close();}
+});

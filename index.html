@@ -1063,6 +1063,7 @@ async function playSpin(recover = false) {
   }
   const operation = { ...pending };
   spinning = true;
+  byId("lastSpinResult").textContent = "";
   render();
   note(recover ? "Проверяем сохранённый результат…" : "Сохраняем прокрутку…");
   try {
@@ -1075,7 +1076,20 @@ async function playSpin(recover = false) {
       result.isTest !== false
     ) throw Error("Не удалось подтвердить результат.");
     byId("subscriptionPanel").hidden = true;
-    // Show committed results before animation, without depending on optional storage.
+    if (!recover) {
+      note("Рулетка крутится…");
+      const target = result.prize && prizeImages[result.prize]
+        ? Array(4).fill(prizeImages[result.prize])
+        : symbols.slice(0, 4);
+      try {
+        await Promise.allSettled(
+          reels.map((reel, index) => spinReel(reel, index, target[index])),
+        );
+      } catch {
+        /* Reveal the saved result even if animation is unavailable. */
+      }
+    }
+    // Reveal the committed result only after every reel has stopped.
     showResult(result, recover || result.replayed);
     pending = null;
     savePending();
@@ -1086,18 +1100,6 @@ async function playSpin(recover = false) {
       byId("retryLoadButton").hidden = false;
     }
     note(serverStatusLoaded ? "" : "Результат сохранён. Нажмите «Повторить загрузку», чтобы обновить попытки.");
-    if (!recover) {
-      const target = result.prize && prizeImages[result.prize]
-        ? Array(4).fill(prizeImages[result.prize])
-        : symbols.slice(0, 4);
-      try {
-        await Promise.all(
-          reels.map((reel, index) => spinReel(reel, index, target[index])),
-        );
-      } catch {
-        /* History and result remain visible if animation is unavailable. */
-      }
-    }
   } catch (error) {
     if (error.code === "SUBSCRIPTION_REQUIRED") {
       byId("subscriptionPanel").hidden = false;
