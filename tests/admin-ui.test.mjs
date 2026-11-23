@@ -44,21 +44,26 @@ test('prize stock plan is a draft until saved, validates caps and clears with th
   try {
     await login();
     const limits=()=>[...w.document.querySelectorAll('.prizeLimitInput')];
-    assert.equal(limits().length,5);
+    assert.equal(limits().length,6);
     const before=calls.length;click('suggestPrizePlanButton');
     assert.equal(calls.length,before);
     assert.equal(el('prizeChancesTotal').textContent,'Итого: 100.0000%');
     assert.deepEqual(limits().map(i=>[i.dataset.prize,Number(i.value)]),[
-      ['Картридж',20],['Расходники',30],['Noir Blade',3],['Soul Ink',20],['Бандажка',50]]);
+      ['Картридж',20],['Расходники',30],['Noir Blade',3],['Soul Ink',20],['Бандажка',50],['Мерч WJX',10]]);
     limits()[0].value='1.5';click('savePrizeChancesButton');
     assert.equal(calls.length,before);assert.match(el('statusMessage').textContent,/целым/);
     limits()[0].value='20';click('savePrizeChancesButton');
     await until(()=>!el('savePrizeChancesButton').disabled);
-    const saved=calls.find(c=>c.body.action==='admin_save_prize_chances').body.prizes;
-    assert.equal(saved.find(p=>p.prize==='Noir Blade').chance,0.0333);
+    const save=calls.find(c=>c.body.action==='admin_save_prize_chances').body;
+    assert.equal(save.limitScope,'day');
+    const saved=save.prizes;
+    assert.equal(saved.find(p=>p.prize==='Noir Blade').chance,0.1);
+    assert.equal(saved.find(p=>p.prize==='Мерч WJX').chance,0.3333);
+    assert.equal(saved.find(p=>p.prize==='Мерч WJX').prize_limit,10);
+    assert.match(el('prizeStockDate').textContent,/23.11.2026/);
     assert.equal(saved.find(p=>p.prize==='Noir Blade').prize_limit,3);
     assert.equal(saved.find(p=>p.prize==='Без выигрыша').prize_limit,null);
-    assert.match(el('prizeChancesFields').textContent,/Осталось: 0/);
+    assert.match(el('prizeChancesFields').textContent,/Осталось сегодня:/);
     expire();assert.equal(limits().length,0);
   } finally {w.close();}
 });
@@ -75,7 +80,7 @@ test('browser login, settings, statistics, prize chances and logout work without
     await login();
     assert.equal(el('adminContent').hidden,false);
     assert.equal(el('settingsFields').disabled,false);
-    assert.equal(w.document.querySelectorAll('.prizeChanceInput').length,6);
+    assert.equal(w.document.querySelectorAll('.prizeChanceInput').length,7);
     assert.match(el('prizesPanel').textContent,/1200/);
     assert.equal(calls.some(c=>c.body.initData),false);
     assert.equal(w.sessionStorage.length,0);
@@ -108,7 +113,7 @@ test('expired sessions clear controls and fetched data',async()=>{
 });
 test('participant names and prize history are rendered as text',async()=>{
   const ui=setup();const rpc=ui.db.rpc;
-  ui.db.rpc=async(name,args)=>name==='wjx_admin_prize_stats'?{data:{prizes:[],history:[{username:'<img src=x onerror=alert(1)>',spin_date:'2026-11-19',prize:'<script>evil()</script>'}]}}:rpc(name,args);
+  ui.db.rpc=async(name,args)=>name==='wjx_admin_prize_stats'?{data:{limitScope:'day',stockDate:'2026-11-23',prizes:[],history:[{username:'<img src=x onerror=alert(1)>',spin_date:'2026-11-19',prize:'<script>evil()</script>'}]}}:rpc(name,args);
   try {
     await ui.login();
     assert.match(ui.el('winsHistory').textContent,/<img/);
@@ -145,7 +150,7 @@ test('valid server sessions are accepted when device time is ahead or behind',as
 test('winner nickname opens server totals for the event and skips empty outcomes',async()=>{
   const ui=setup();ui.db.eventWinCount=3;
   const originalRpc=ui.db.rpc;
-  ui.db.rpc=async(name,args)=>name==='wjx_admin_prize_stats'?{data:{prizes:[],history:[
+  ui.db.rpc=async(name,args)=>name==='wjx_admin_prize_stats'?{data:{limitScope:'day',stockDate:'2026-11-23',prizes:[],history:[
     {telegram_id:'123456789',username:'player',spin_date:'2026-11-27',prize:'Картридж'},
     {telegram_id:'123456789',username:'player',spin_date:'2026-11-28',prize:'Без выигрыша'},
     {telegram_id:'123456789',username:'player',spin_date:'2026-11-28',prize:null},
@@ -208,4 +213,18 @@ test('admin pause applies separately without saving or resetting draft dates',as
     p.el('spinsPaused').checked=false;p.click('savePauseButton');await until(()=>!p.el('savePauseButton').disabled);
     assert.equal(p.db.settings.spins_paused,false);
   } finally {p.w.close();}
+});
+test('daily probability calculator uses edited caps and attempt allowance without overwriting limits or saving',async()=>{
+  const {w,el,click,login,calls}=setup();try {
+    await login();
+    const merchLimit=[...w.document.querySelectorAll('.prizeLimitInput')].find(i=>i.dataset.prize==='Мерч WJX');
+    const merchChance=[...w.document.querySelectorAll('.prizeChanceInput')].find(i=>i.dataset.prize==='Мерч WJX');
+    merchLimit.value='20';el('dailySpins').value='5';const before=calls.length;
+    click('suggestPrizePlanButton');
+    assert.equal(merchChance.value,'0.4');assert.equal(merchLimit.value,'20');
+    assert.equal(calls.length,before);assert.match(el('statusMessage').textContent,/5000/);
+    assert.equal(el('prizeChancesTotal').textContent,'Итого: 100.0000%');
+    merchLimit.value='';click('suggestPrizePlanButton');
+    assert.match(el('statusMessage').textContent,/Безлимитные/);assert.equal(merchChance.value,'0.4');assert.equal(calls.length,before);
+  } finally {w.close();}
 });

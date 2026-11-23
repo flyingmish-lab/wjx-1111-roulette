@@ -765,6 +765,7 @@ const symbols = [
   "Noir Blade.webp",
   "Soul Ink 1.webp",
   "бандажка.webp",
+  "wjx-merch.webp",
 ];
 const prizeImages = {
   "Картридж": symbols[0],
@@ -772,6 +773,7 @@ const prizeImages = {
   "Noir Blade": symbols[2],
   "Soul Ink": symbols[3],
   "Бандажка": symbols[4],
+  "Мерч WJX": symbols[5],
 };
 const telegramInitData = window.Telegram?.WebApp?.initData || "";
 const telegramUserId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
@@ -1230,7 +1232,7 @@ function makeSymbol(value, height) {
   if (/\.(png|webp)$/i.test(value)) {
     const img = document.createElement("img");
     img.src = encodeURI(value);
-    img.alt = "Упаковка картриджей WJX";
+    img.alt = Object.keys(prizeImages).find((prize) => prizeImages[prize] === value) || "Приз WJX";
     img.style.width = "90%";
     img.style.height = "90%";
     img.style.objectFit = "contain";

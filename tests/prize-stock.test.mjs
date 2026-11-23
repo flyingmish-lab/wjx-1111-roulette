@@ -9,7 +9,7 @@ async function database() {
   const db=new PGlite();
   await db.exec(fs.readFileSync('tests/database.test.mjs','utf8').match(/const fixture=`([\s\S]*?)`;/)[1]);
   await db.exec('alter table roulette_prize_chances alter column chance type numeric(5,2)');
-  for(const file of fs.readdirSync('supabase/migrations').sort().filter(f=>f.endsWith('.sql')&&!f.includes('230007')))await db.exec(fs.readFileSync('supabase/migrations/'+file,'utf8'));
+  for(const file of fs.readdirSync('supabase/migrations').sort().filter(f=>f.endsWith('.sql')&&!f.includes('230007')&&!f.includes('230009')))await db.exec(fs.readFileSync('supabase/migrations/'+file,'utf8'));
   await db.exec("insert into roulette_prize_chances(prize,chance) values ('Noir Blade',0),('Картридж',0),('Бандажка',0),('Soul Ink',0),('Расходники',0); insert into wjx_spins(telegram_id,spin_date,spin_number,prize) values(123456789,'2020-01-01',1,'Noir Blade');");
   return db;
 }
@@ -82,17 +82,17 @@ test('only password admin can save integer caps; omitted caps preserve existing 
   const auth=loadFunction('supabase/functions/wjx-admin-auth/index.ts',db).handleAdminAuth;
   const login=await (await auth(request({action:'login',password:env.WJX_ADMIN_PASSWORD}))).json();
   const capped=prizes.map(p=>({...p,prize_limit:p.prize==='Без выигрыша'?null:3}));
-  assert.equal((await api(request({action:'admin_save_prize_chances',prizes:capped}))).status,401);
-  assert.equal((await api(request({action:'admin_save_prize_chances',prizes:capped},login.token))).status,200);
+  assert.equal((await api(request({action:'admin_save_prize_chances',limitScope:'day',prizes:capped}))).status,401);
+  assert.equal((await api(request({action:'admin_save_prize_chances',limitScope:'day',prizes:capped},login.token))).status,200);
   assert.equal(db.prizes.find(p=>p.prize==='Noir Blade').prize_limit,3);
   const invalid=[-1,1.5,1000001,'3',true];
   const writes=()=>db.calls.filter(c=>c.operation==='upsert').length;
   const before=writes();
-  for(const cap of invalid)assert.equal((await api(request({action:'admin_save_prize_chances',prizes:capped.map(p=>p.prize==='Noir Blade'?{...p,prize_limit:cap}:p)},login.token))).status,400);
-  assert.equal((await api(request({action:'admin_save_prize_chances',prizes:capped.map(p=>({...p,prize_limit:0}))},login.token))).status,400);
+  for(const cap of invalid)assert.equal((await api(request({action:'admin_save_prize_chances',limitScope:'day',prizes:capped.map(p=>p.prize==='Noir Blade'?{...p,prize_limit:cap}:p)},login.token))).status,400);
+  assert.equal((await api(request({action:'admin_save_prize_chances',limitScope:'day',prizes:capped.map(p=>({...p,prize_limit:0}))},login.token))).status,400);
   const mixed=capped.map(p=>({...p}));delete mixed[0].prize_limit;
-  assert.equal((await api(request({action:'admin_save_prize_chances',prizes:mixed},login.token))).status,400);
+  assert.equal((await api(request({action:'admin_save_prize_chances',limitScope:'day',prizes:mixed},login.token))).status,400);
   assert.equal(writes(),before);
-  assert.equal((await api(request({action:'admin_save_prize_chances',prizes},login.token))).status,200);
+  assert.equal((await api(request({action:'admin_save_prize_chances',limitScope:'day',prizes:prizes.map(({prize,chance})=>({prize,chance}))},login.token))).status,200);
   assert.equal(db.prizes.find(p=>p.prize==='Noir Blade').prize_limit,3);
 });

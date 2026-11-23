@@ -22,6 +22,7 @@ function clearSession(text = "") {
   byId("adminPassword").value = "";
   byId("prizeChancesFields").replaceChildren();
   byId("prizesPanel").replaceChildren();
+  byId("prizeStockDate").textContent = "";
   byId("winsHistory").replaceChildren();
   byId("testUserSelect").replaceChildren();
   byId("testUserSearch").value = "";
@@ -111,7 +112,7 @@ function renderChances() {
     fields.append(label);
     if (isWinningPrize(item.prize)) {
       const limitLabel = document.createElement("label");
-      limitLabel.append("Максимум за весь розыгрыш:");
+      limitLabel.append("Максимум в день (МСК):");
       const limit = document.createElement("input");
       Object.assign(limit, {type: "number", min: "0", max: "1000000", step: "1",
         value: item.prize_limit ?? "", placeholder: "Без ограничения", className: "prizeLimitInput"});
@@ -119,7 +120,7 @@ function renderChances() {
       limitLabel.append(limit);
       fields.append(limitLabel);
       const stock = document.createElement("p");
-      stock.textContent = `Выиграно: ${item.realWins} | Осталось: ${item.remaining ?? "без ограничения"}`;
+      stock.textContent = `Сегодня выиграно: ${item.todayWins} | Осталось сегодня: ${item.remainingToday ?? "без ограничения"}`;
       fields.append(stock);
     }
   }
@@ -144,6 +145,8 @@ async function loadSettings() {
 }
 async function loadPrizes() {
   const result = await adminApi("admin_get_prizes");
+  if (result.limitScope !== "day") throw Error("Обновление дневных лимитов ещё не завершено. Повторите загрузку позже.");
+  byId("prizeStockDate").textContent = `Остатки за ${result.stockDate.split("-").reverse().join(".")} (МСК)`;
   prizeChances = result.prizes;
   renderChances();
   const panel = byId("prizesPanel");
@@ -153,7 +156,7 @@ async function loadPrizes() {
   ) {
     const line = document.createElement("p");
     line.textContent =
-      `${item.prize} — шанс ${item.chance}% | Лимит: ${item.prize_limit ?? "без ограничения"} | Выигрышей: ${item.realWins} | Осталось: ${item.remaining ?? "без ограничения"} | Тестовых (без призов): ${item.testWins}`;
+      `${item.prize} — шанс ${item.chance}% | Лимит в день: ${item.prize_limit ?? "без ограничения"} | Сегодня выиграно: ${item.todayWins} | Осталось сегодня: ${item.remainingToday ?? "без ограничения"} | Всего выигрышей: ${item.realWins} | Тестовых (без призов): ${item.testWins}`;
     panel.append(line);
   }
   const history = byId("winsHistory");
@@ -273,13 +276,22 @@ byId("saveButton").addEventListener("click", async () => {
   }
 });
 byId("suggestPrizePlanButton").addEventListener("click", () => {
-  const plan = {"Noir Blade": [0.0333, 3], "Картридж": [0.2222, 20],
-    "Бандажка": [0.5556, 50], "Soul Ink": [0.2222, 20], "Расходники": [0.3333, 30],
-    "Без выигрыша": [98.6334, null]};
-  for (const input of document.querySelectorAll(".prizeChanceInput")) input.value = plan[input.dataset.prize][0];
-  for (const input of document.querySelectorAll(".prizeLimitInput")) input.value = plan[input.dataset.prize][1];
+  const attempts = Number(byId("dailySpins").value);
+  if (!Number.isInteger(attempts) || attempts < 1 || attempts > 20) {
+    message("Укажите количество попыток в день от 1 до 20."); return;
+  }
+  const limits = [...document.querySelectorAll(".prizeLimitInput")];
+  if (limits.some((input) => !input.value.trim() || input.validity.badInput || !Number.isInteger(Number(input.value)) || Number(input.value) < 0 || Number(input.value) > 1000000)) {
+    message("Для расчёта укажите целый дневной лимит каждого приза. Безлимитные призы настройте вручную."); return;
+  }
+  const spins = 1000 * attempts;
+  const chances = new Map(limits.map((input) => [input.dataset.prize, Math.round(Number(input.value) / spins * 1000000)]));
+  const total = [...chances.values()].reduce((sum, value) => sum + value, 0);
+  if (total > 1000000) {message("Сумма дневных лимитов превышает число прокруток. Уменьшите лимиты или настройте шансы вручную."); return;}
+  chances.set("Без выигрыша", 1000000 - total);
+  for (const input of document.querySelectorAll(".prizeChanceInput")) input.value = chances.get(input.dataset.prize) / 10000;
   updateTotal();
-  message("План подставлен. Проверьте значения и нажмите «Сохранить вероятности и лимиты».");
+  message(`Расчёт на ${spins} прокруток в день подставлен. Проверьте значения и нажмите «Сохранить вероятности и лимиты».`);
 });
 byId("savePrizeChancesButton").addEventListener("click", async () => {
   const inputs = [...document.querySelectorAll(".prizeChanceInput")];
@@ -297,7 +309,7 @@ byId("savePrizeChancesButton").addEventListener("click", async () => {
     prizes.find((item) => item.prize === limit.dataset.prize).prize_limit = value ? Number(value) : null;
   }
   if (
-    inputs.length !== 6 || inputs.some((input) => !input.value.trim()) ||
+    inputs.length !== prizeChances.length || inputs.length !== 7 || inputs.some((input) => !input.value.trim()) ||
     prizes.some((item) =>
       !Number.isFinite(item.chance) || item.chance < 0 || item.chance > 100
     ) ||
@@ -309,7 +321,7 @@ byId("savePrizeChancesButton").addEventListener("click", async () => {
   const button = byId("savePrizeChancesButton");
   button.disabled = true;
   try {
-    await adminApi("admin_save_prize_chances", { prizes });
+    await adminApi("admin_save_prize_chances", { prizes, limitScope: "day" });
     await loadPrizes();
     message("Вероятности сохранены. Лимиты призов сохранены.");
   } catch (error) {

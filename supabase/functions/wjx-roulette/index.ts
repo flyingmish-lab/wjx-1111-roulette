@@ -29,6 +29,7 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
 const encoder = new TextEncoder();
 
 const settingsTable = "roulette_settings";
+const prizeNames = ["Картридж", "Расходники", "Noir Blade", "Soul Ink", "Бандажка", "Без выигрыша", "Мерч WJX"];
 
 async function loadPrizeChances() {
   const { data, error } = await supabase
@@ -40,7 +41,11 @@ async function loadPrizeChances() {
   }
 
   if (
-    data.length !== 6 ||
+    // Accept the previous catalog while the additive migration is being deployed.
+    ![prizeNames.length - 1, prizeNames.length].includes(data.length) ||
+    new Set(data.map((item) => item.prize)).size !== data.length ||
+    !prizeNames.slice(0, 6).every((prize) => data.some((item) => item.prize === prize)) ||
+    data.some((item) => !prizeNames.includes(item.prize)) ||
     data.some((item) =>
       !Number.isFinite(Number(item.chance)) || Number(item.chance) < 0 ||
       Number(item.chance) > 100
@@ -547,11 +552,14 @@ async function roulette(req: Request): Promise<Response> {
     return json({ success: true, testRemaining: data });
   }
   if (action === "admin_save_prize_chances") {
+    if (requestData.limitScope !== "day") {
+      return json({ success: false, error: "Обновите админ-панель: теперь лимиты призов задаются на день по Москве." }, 400);
+    }
     const prizes = requestData.prizes;
 
     if (
       !Array.isArray(prizes) ||
-      prizes.length !== 6 ||
+      prizes.length !== prizeNames.length ||
       (prizes.some((item) => item?.prize_limit !== undefined) &&
         prizes.some((item) => item?.prize_limit === undefined)) ||
       prizes.some(
@@ -574,14 +582,7 @@ async function roulette(req: Request): Promise<Response> {
         { status: 400, headers: corsHeaders },
       );
     }
-    const allowedPrizes = [
-      "Картридж",
-      "Расходники",
-      "Noir Blade",
-      "Soul Ink",
-      "Бандажка",
-      "Без выигрыша",
-    ];
+    const allowedPrizes = prizeNames;
 
     const receivedPrizes = prizes.map((item) => item.prize);
 

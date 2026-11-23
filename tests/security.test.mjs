@@ -78,9 +78,9 @@ test('browser session authorizes all retained APIs without Telegram; server vali
     {end_time:'23:59<script>'},{start_time:'24:00'},{event_end:'2026-11-25'}]) {
     assert.equal((await call('admin_save_settings',{settings:{...settings,...patch}})).status,400);
   }
-  assert.equal((await call('admin_save_prize_chances',{prizes})).status,200);
+  assert.equal((await call('admin_save_prize_chances',{prizes,limitScope:'day'})).status,200);
   for(const invalid of [prizes.slice(1),prizes.map(p=>({...p,chance:0})),prizes.map(p=>({...p,prize:'injected'})),prizes.map(p=>({...p,chance:-1}))]) {
-    assert.equal((await call('admin_save_prize_chances',{prizes:invalid})).status,400);
+    assert.equal((await call('admin_save_prize_chances',{prizes:invalid,limitScope:'day'})).status,400);
   }
   assert.equal(db.calls.some(c=>c.table==='wjx_participants'),false,'admin never becomes a player');
   assert.equal(db.calls.some(c=>c.operation==='delete'),false);

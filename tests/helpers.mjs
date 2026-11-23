@@ -7,7 +7,7 @@ import { webcrypto } from 'node:crypto';
 export const env = { SUPABASE_URL: 'https://test.invalid', SUPABASE_SERVICE_ROLE_KEY: 'test-service-role',
   TELEGRAM_BOT_TOKEN: 'test-bot-token', WJX_ADMIN_PASSWORD: 'test-only-password', WJX_ADMIN_SESSION_SECRET: 'test-only-session-secret-with-32-characters' };
 export const baseSettings = { event_start: '2000-01-01', event_end: '2099-12-31', start_time: '00:00:00', end_time: '23:59:00', daily_spins: 3, spins_paused: false };
-export const prizes = ['Картридж', 'Расходники', 'Noir Blade', 'Soul Ink', 'Бандажка', 'Без выигрыша'].map((prize, i) => ({prize, chance: i === 5 ? 50 : 10}));
+export const prizes = ['Картридж', 'Расходники', 'Noir Blade', 'Soul Ink', 'Бандажка', 'Без выигрыша', 'Мерч WJX'].map((prize, i) => ({prize, chance: i === 6 ? 0 : i === 5 ? 50 : 10, prize_limit: [20,30,3,20,50,null,10][i]}));
 
 export function mockDb() {
   const db = { prizes: prizes.map(p=>({...p})), sessions: new Map(), balances: new Map(), eventWinCount: 0, operations: new Map(), deliveries: new Map(), realSpinsUsed: 1, dailyHistory: [{prize:'Без выигрыша',spinNumber:1}], calls: [], attempts: 0, settings: {...baseSettings}, failLimiter: false, failSessions: false,
@@ -58,7 +58,7 @@ export function mockDb() {
         if(n<=0) return {error:{code:'P0001'}};
         db.balances.set(args.p_telegram_id,n-1);return {data:n-1};
       }
-      if (name === 'wjx_admin_prize_stats') return {data:{prizes:db.prizes.map(p=>({...p,realWins:1200,testWins:2,remaining:p.prize_limit==null?null:Math.max(0,p.prize_limit-1200)})),history:[]}};
+      if (name === 'wjx_admin_prize_stats') return {data:{limitScope:'day',stockDate:'2026-11-23',prizes:db.prizes.map(p=>({...p,realWins:1200,todayWins:2,testWins:2,remainingToday:p.prize_limit==null?null:Math.max(0,p.prize_limit-2)})),history:[]}};
       if (name === 'wjx_save_spin') {db.realSpinsUsed++;db.dailyHistory.push({prize:args.p_prize,spinNumber:db.realSpinsUsed});if(args.p_prize!=='Без выигрыша')db.eventWinCount++;return {data:[{spin_number:db.realSpinsUsed,spins_remaining:db.settings.daily_spins-db.realSpinsUsed}]};}
       throw Error('Unexpected RPC');
     },

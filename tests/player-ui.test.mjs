@@ -353,3 +353,17 @@ test('last event day does not promise tomorrow; assigned attempts do not show a 
     } finally {p.w.close();}
   }
 });
+test('merch WebP participates in reels, shows the winning image and remains in real prize history',async()=>{
+  const p=await setupPlayer({attempts:0,eventStart:'2000-01-01',prepare:({w,db})=>{
+    w.Math.random=()=>0.99999;
+    db.prizes=db.prizes.map(p=>({...p,chance:p.prize==='Мерч WJX'?100:0}));
+  }});
+  try {
+    assert.ok(p.w.document.querySelector('img[src="wjx-merch.webp"]'),'new symbol participates in reel strips');
+    p.el('leverButton').click();
+    await until(()=>p.el('lastSpinResult').textContent.includes('Мерч WJX')&&!p.el('spinButton').disabled);
+    assert.match(p.el('prizeResult').textContent,/Мерч WJX/);
+    for(const reel of p.w.document.querySelectorAll('.reel'))assert.ok(reel.querySelector('img[src="wjx-merch.webp"]'));
+    const sizes=fs.statSync('wjx-merch.webp');assert.ok(sizes.size<100000);
+  } finally {p.w.close();}
+});
