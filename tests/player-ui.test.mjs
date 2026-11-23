@@ -7,7 +7,7 @@ async function until(predicate) {
   for(let i=0;i<500;i++) { if(predicate())return; await new Promise(resolve=>setTimeout(resolve,10)); }
   throw Error('Player UI did not settle');
 }
-async function setupPlayer({attempts=1,eventStart='2099-01-01',eventEnd='2099-12-31',eventWinCount=0,history=[],prepare,allowFailure=false}={}) {
+async function setupPlayer({attempts=0,eventStart='2000-01-01',eventEnd='2099-12-31',eventWinCount=0,history=[],prepare,allowFailure=false}={}) {
   const db=mockDb();db.balances.set(123456789,attempts);db.eventWinCount=eventWinCount;
   db.settings.event_start=eventStart;db.settings.event_end=eventEnd;
   const handler=loadFunction('supabase/functions/wjx-roulette/index.ts',db).handleRoulette;
@@ -25,58 +25,34 @@ async function setupPlayer({attempts=1,eventStart='2099-01-01',eventEnd='2099-12
   const releaseLever=()=>w.document.querySelector('.lever-stick').dispatchEvent(new w.Event('animationend',{bubbles:true}));
   return {db,dom,w,el,alerts,calls,releaseLever};
 }
-test('assigned attempts work through the lever without public testing controls or balances',async()=>{
-  const {db,w,el,alerts,calls}=await setupPlayer();
-  try {
-    for(const id of ['testPlayPanel','testSpinButton','playModeNote','testModeToggle','testBalanceNote','testSpinResult'])assert.equal(el(id),null);
-    assert.doesNotMatch(w.document.body.textContent,/тестов|тестирован/i);
-    assert.equal(el('leverButton').getAttribute('aria-label'),'Потянуть рычаг');
-    el('leverButton').click();
-    await until(()=>el('lastSpinResult').textContent==='Прокрутка завершена.'&&!el('spinButton').disabled);
-    assert.equal(db.balances.get(123456789),0);
-    assert.equal(calls.filter(c=>c.action==='test_spin').length,1);
-    assert.equal(calls.filter(c=>c.action==='spin').length,0);
-    assert.equal(w.localStorage.getItem('wjxEventHistory'),null);
-    assert.equal(alerts.length,0);
-  } finally {w.close();}
+test('all players use real spins even when historical test balances remain',async()=>{
+  const p=await setupPlayer({attempts:9});try {
+    assert.doesNotMatch(p.w.document.body.textContent,/тестов|тестирован/i);
+    p.el('leverButton').click();await until(()=>p.el('lastSpinResult').textContent.includes('Результат')&&!p.el('spinButton').disabled);
+    assert.equal(p.db.realSpinsUsed,2);assert.equal(p.db.balances.get(123456789),9);
+    assert.equal(p.calls.filter(c=>c.action==='spin').length,1);assert.equal(p.calls.some(c=>c.action==='test_spin'),false);
+  }finally{p.w.close();}
 });
-test('assigned attempts bypass the future schedule without a public mode notice',async()=>{
-  const {w,el,alerts,calls}=await setupPlayer();try {
-    el('leverButton').click();
-    await until(()=>el('lastSpinResult').textContent==='Прокрутка завершена.');
-    assert.equal(calls.filter(c=>c.action==='test_spin').length,1);
-    assert.equal(alerts.length,0);
-  } finally {w.close();}
+test('historical test balances never bypass future or finished real schedules',async()=>{
+  for(const values of [{eventStart:'2099-01-01'},{eventStart:'2000-01-01',eventEnd:'2001-01-01'}]) {
+    const p=await setupPlayer({...values,attempts:9});try {
+      p.el('leverButton').click();await until(()=>p.alerts.length>0);
+      assert.equal(p.calls.some(c=>c.action==='spin'||c.action==='test_spin'),false);
+      if(values.eventEnd)assert.equal(p.w.getComputedStyle(p.w.document.querySelector('.reels')).display,'none');
+    }finally{p.w.close();}
+  }
 });
-test('exhausted assigned attempts never silently spend real attempts',async()=>{
-  const {w,el,calls,releaseLever}=await setupPlayer({eventStart:'2000-01-01'});try {
-    el('leverButton').click();
-    await until(()=>el('lastSpinResult').textContent==='Прокрутка завершена.'&&!el('spinButton').disabled);
-    releaseLever();el('leverButton').click();
-    await until(()=>el('lastSpinResult').textContent.includes('закончились'));
-    assert.equal(calls.filter(c=>c.action==='test_spin').length,1);
-    assert.equal(calls.filter(c=>c.action==='spin').length,0);
-    assert.doesNotMatch(w.document.body.textContent,/тестов|тестирован/i);
-  } finally {w.close();}
+test('exhausted real attempts stay exhausted despite historical allocations',async()=>{
+  const p=await setupPlayer({attempts:9,prepare:({db})=>{db.realSpinsUsed=3;}});try {
+    assert.equal(p.el('leverButton').disabled,true);assert.equal(p.el('limitMessage').hidden,false);
+    p.el('leverButton').click();assert.equal(p.calls.some(c=>c.action==='spin'||c.action==='test_spin'),false);
+  }finally{p.w.close();}
 });
-test('assigned attempts keep the lever usable after the event ends',async()=>{
-  const {w,el,alerts,calls}=await setupPlayer({eventStart:'2000-01-01',eventEnd:'2001-01-01'});try {
-    assert.notEqual(w.getComputedStyle(el('leverButton')).display,'none');
-    assert.notEqual(w.getComputedStyle(w.document.querySelector('.reels')).display,'none');
-    el('leverButton').click();
-    await until(()=>el('lastSpinResult').textContent==='Прокрутка завершена.');
-    assert.equal(calls.filter(c=>c.action==='test_spin').length,1);
-    assert.equal(alerts.length,0);
-  } finally {w.close();}
-});
-test('unassigned users retain the real schedule',async()=>{
-  const {w,el,alerts,calls}=await setupPlayer({attempts:0});try {
-    assert.equal(el('testPlayPanel'),null);
-    el('leverButton').click();
-    await until(()=>alerts.length>0);
-    assert.match(alerts[0],/Розыгрыш начнётся/);
-    assert.equal(calls.filter(c=>c.action==='test_spin'||c.action==='spin').length,0);
-  } finally {w.close();}
+test('stored obsolete pending test requests are ignored without replaying or spending a real spin',async()=>{
+  const p=await setupPlayer({prepare:({w})=>w.localStorage.setItem('wjxPendingSpin:123456789',JSON.stringify({operationId:'00000000-0000-4000-8000-000000000001',isTest:true}))});try {
+    assert.equal(p.el('recoverSpinButton').hidden,true);assert.equal(p.calls.some(c=>c.action==='spin'||c.action==='test_spin'),false);
+    assert.equal(p.el('leverButton').disabled,false);
+  }finally{p.w.close();}
 });
 test('flattened dashboard build preserves the configuration guard and authenticated API',async()=>{
   const db=mockDb();
@@ -84,12 +60,12 @@ test('flattened dashboard build preserves the configuration guard and authentica
   const roulette=loadFunction('dashboard-dist/wjx-roulette/index.ts',db).handleRoulette;
   const req=new Request('https://test.invalid',{method:'POST',headers:{'content-type':'application/json'},body:'{"action":"check_configuration"}'});
   assert.equal((await auth(req)).status,400);
-  const denied=new Request('https://test.invalid',{method:'POST',headers:{'content-type':'application/json'},body:'{"action":"admin_test_users"}'});
+  const denied=new Request('https://test.invalid',{method:'POST',headers:{'content-type':'application/json'},body:'{"action":"admin_spin_users"}'});
   assert.equal((await roulette(denied)).status,401);
 });
 
 test('after the event claim opens only the manager chat for a real server-confirmed winner',async()=>{
-  const {w,el,calls,alerts}=await setupPlayer({attempts:0,eventStart:'2000-01-01',eventEnd:'2001-01-01',eventWinCount:2});
+  const {w,el,calls,alerts}=await setupPlayer({attempts:9,eventStart:'2000-01-01',eventEnd:'2001-01-01',eventWinCount:2});
   const links=[];w.Telegram.WebApp.openTelegramLink=url=>links.push(url);
   try {
     assert.equal(w.getComputedStyle(el('claimPrizeButton')).display,'block');
@@ -98,11 +74,10 @@ test('after the event claim opens only the manager chat for a real server-confir
     assert.equal(calls.length,before);assert.equal(alerts.length,0);
   } finally {w.close();}
 });
-test('local browser prize history cannot enable claiming; tests and active events cannot claim',async()=>{
+test('local browser prize history cannot enable claiming; active events cannot claim',async()=>{
   for(const values of [
     {attempts:0,eventStart:'2000-01-01',eventEnd:'2001-01-01',eventWinCount:0,history:[{date:'2000-01-01',prize:'🎁 Картридж'}]},
     {attempts:0,eventStart:'2000-01-01',eventWinCount:2},
-    {attempts:1,eventStart:'2000-01-01',eventEnd:'2001-01-01',eventWinCount:2},
   ]) {
     const {w,el}=await setupPlayer(values);const links=[];w.Telegram.WebApp.openTelegramLink=url=>links.push(url);
     try {
@@ -211,7 +186,7 @@ test('subscription prompt opens only the official channel and checking never spe
     await until(()=>!p.el('subscriptionPanel').hidden&&!p.el('spinButton').disabled);
     assert.equal(p.alerts.length,1);
     assert.match(p.alerts[0],/Чтобы крутить рулетку.*@tattoowjxrussia/);
-    assert.equal(p.db.operations.size,0);assert.equal(p.db.balances.get(123456789),1);
+    assert.equal(p.db.operations.size,0);assert.equal(p.db.realSpinsUsed,1);
     p.el('subscribeButton').click();assert.deepEqual(opened,['https://t.me/tattoowjxrussia']);
     p.el('checkSubscriptionButton').click();
     await until(()=>p.el('subscriptionNote').textContent.includes('не найдена')&&!p.el('checkSubscriptionButton').disabled);
@@ -222,7 +197,7 @@ test('subscription prompt opens only the official channel and checking never spe
     assert.equal(p.db.operations.size,0);
     p.releaseLever();p.el('leverButton').click();
     await until(()=>p.db.operations.size===1&&!p.el('spinButton').disabled);
-    assert.equal(p.db.balances.get(123456789),0);
+    assert.equal(p.db.realSpinsUsed,2);
   } finally {p.w.close();}
 });
 test('lever subscription popup opens the channel only after confirmation and never spends an attempt',async()=>{
@@ -244,7 +219,7 @@ test('lever subscription popup opens the channel only after confirmation and nev
     p.el('checkSubscriptionButton').click();
     await until(()=>!p.el('checkSubscriptionButton').disabled);
     assert.equal(popups.length,1);
-    assert.equal(p.db.operations.size,0);assert.equal(p.db.balances.get(123456789),1);
+    assert.equal(p.db.operations.size,0);assert.equal(p.db.realSpinsUsed,1);
   } finally {p.w.close();}
 });
 for(const mode of ['unsupported','throws'])test(`subscription popup falls back safely when Telegram popup ${mode}`,async()=>{
@@ -258,7 +233,7 @@ for(const mode of ['unsupported','throws'])test(`subscription popup falls back s
     await until(()=>p.alerts.length===1&&!p.el('spinButton').disabled);
     assert.match(p.alerts[0],/Чтобы крутить рулетку.*@tattoowjxrussia/);
     assert.equal(p.el('subscriptionPanel').hidden,false);
-    assert.equal(p.db.operations.size,0);assert.equal(p.db.balances.get(123456789),1);
+    assert.equal(p.db.operations.size,0);assert.equal(p.db.realSpinsUsed,1);
   } finally {p.w.close();}
 });
 test('paused game disables new spins and preserves access to existing prizes',async()=>{
@@ -271,7 +246,7 @@ test('paused game disables new spins and preserves access to existing prizes',as
 });
 test('polling backs off when idle and refreshes on return without querying Telegram membership',async()=>{
   const timers=[];let visible=true;
-  const p=await setupPlayer({attempts:0,prepare:({w})=>{
+  const p=await setupPlayer({attempts:0,eventStart:'2099-01-01',prepare:({w})=>{
     Object.defineProperty(w.document,'hidden',{get:()=>!visible,configurable:true});
     const realTimeout=w.setTimeout.bind(w);
     w.setTimeout=(fn,ms,...args)=>{if(ms>=60000){timers.push({fn,ms});return 999;}return realTimeout(fn,ms,...args);};
@@ -341,16 +316,14 @@ test('unconfirmed last attempt retains recovery controls instead of claiming a c
     assert.match(p.el('lastSpinResult').textContent,/Восстановленный результат/);
   } finally {p.w.close();}
 });
-test('last event day does not promise tomorrow; assigned attempts do not show a real daily limit',async()=>{
-  for(const attempts of [0,1]) {
+test('last event day does not promise tomorrow and old test balances do not bypass the real daily limit',async()=>{
+  for(const attempts of [0,9]) {
     const p=await setupPlayer({attempts,eventStart:'2026-11-27',eventEnd:'2026-11-27',prepare:({db})=>{
       db.serverNow='2026-11-27T09:00:00Z';db.realSpinsUsed=3;
-    }});
-    try {
-      assert.equal(p.el('limitMessage').hidden,attempts>0);
-      if(!attempts)assert.doesNotMatch(p.el('limitMessage').textContent,/завтра/);
-      else {assert.equal(p.el('leverButton').disabled,false);p.el('leverButton').click();await until(()=>p.db.balances.get(123456789)===0);}
-    } finally {p.w.close();}
+    }});try {
+      assert.equal(p.el('limitMessage').hidden,false);assert.equal(p.el('leverButton').disabled,true);
+      assert.doesNotMatch(p.el('limitMessage').textContent,/завтра/);
+    }finally{p.w.close();}
   }
 });
 test('merch WebP participates in reels, shows the winning image and remains in real prize history',async()=>{
@@ -366,4 +339,14 @@ test('merch WebP participates in reels, shows the winning image and remains in r
     for(const reel of p.w.document.querySelectorAll('.reel'))assert.ok(reel.querySelector('img[src="wjx-merch.webp"]'));
     const sizes=fs.statSync('wjx-merch.webp');assert.ok(sizes.size<100000);
   } finally {p.w.close();}
+});
+
+test('player refreshes restored real attempts without reopening or spending a spin',async()=>{
+ const p=await setupPlayer({prepare:({db})=>{db.realSpinsUsed=3;}});try{
+  assert.equal(p.el('refreshAttemptsButton').hidden,false);assert.equal(p.el('leverButton').disabled,true);
+  await p.db.rpc('wjx_reset_daily_spins',{p_telegram_id:123456789,p_request_id:'00000000-0000-4000-8000-000000000001'});
+  p.el('refreshAttemptsButton').click();await until(()=>!p.el('leverButton').disabled);
+  assert.equal(p.el('limitMessage').hidden,true);assert.match(p.el('bottomCounter').textContent,/0 из 3/);
+  assert.equal(p.calls.some(c=>c.action==='spin'),false);
+ }finally{p.w.close();}
 });

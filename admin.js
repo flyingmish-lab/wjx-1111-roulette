@@ -4,7 +4,7 @@ const byId = (id) => document.getElementById(id);
 let adminToken = "";
 let expiryTimer;
 let prizeChances = [];
-let testUsersOffset = 0;
+let spinUsersOffset = 0;
 let winnersOffset = 0;
 let winnersRequestVersion = 0;
 let winnerDetailVersion = 0;
@@ -24,10 +24,10 @@ function clearSession(text = "") {
   byId("prizesPanel").replaceChildren();
   byId("prizeStockDate").textContent = "";
   byId("winsHistory").replaceChildren();
-  byId("testUserSelect").replaceChildren();
-  byId("testUserSearch").value = "";
-  byId("testUsersNote").textContent = "";
-  testUsersOffset = 0;
+  byId("spinUserSelect").replaceChildren();
+  byId("spinUserSearch").value = "";
+  byId("spinUsersNote").textContent = "";
+  spinUsersOffset = 0;
   winnersOffset = 0;
   winnersRequestVersion += 1;
   winnerDetailVersion += 1;
@@ -156,7 +156,7 @@ async function loadPrizes() {
   ) {
     const line = document.createElement("p");
     line.textContent =
-      `${item.prize} — шанс ${item.chance}% | Лимит в день: ${item.prize_limit ?? "без ограничения"} | Сегодня выиграно: ${item.todayWins} | Осталось сегодня: ${item.remainingToday ?? "без ограничения"} | Всего выигрышей: ${item.realWins} | Тестовых (без призов): ${item.testWins}`;
+      `${item.prize} — шанс ${item.chance}% | Лимит в день: ${item.prize_limit ?? "без ограничения"} | Сегодня выиграно: ${item.todayWins} | Осталось сегодня: ${item.remainingToday ?? "без ограничения"} | Всего выигрышей: ${item.realWins}`;
     panel.append(line);
   }
   const history = byId("winsHistory");
@@ -213,7 +213,7 @@ byId("loginForm").addEventListener("submit", async (event) => {
     await Promise.all([
       loadSettings(),
       loadPrizes(),
-      loadTestUsers(),
+      loadSpinUsers(),
       loadWinners(),
     ]);
     byId("settingsFields").disabled = false;
@@ -346,80 +346,73 @@ byId("viewPrizesButton").addEventListener("click", async () => {
 sessionStorage.removeItem("wjxAdminInitData");
 clearSession();
 
-async function loadTestUsers() {
-  const result = await adminApi("admin_test_users", {
-    search: byId("testUserSearch").value.trim().replace(/^@/, ""),
-    offset: testUsersOffset,
+function newResetId() {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 15) | 64;
+  bytes[8] = (bytes[8] & 63) | 128;
+  const hex = [...bytes].map(byte => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+}
+const pendingResets = new Map();
+function resetRequestId(id) {
+  if (pendingResets.has(id)) return pendingResets.get(id);
+  let requestId;
+  try {requestId = sessionStorage.getItem(`wjxDailyReset:${id}`);} catch {}
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId || "")) {
+    requestId = newResetId();
+  }
+  pendingResets.set(id, requestId);
+  try {sessionStorage.setItem(`wjxDailyReset:${id}`, requestId);} catch {}
+  return requestId;
+}
+function clearResetRequest(id) {
+  pendingResets.delete(id);
+  try {sessionStorage.removeItem(`wjxDailyReset:${id}`);} catch {}
+}
+async function loadSpinUsers() {
+  const result = await adminApi("admin_spin_users", {
+    search: byId("spinUserSearch").value.trim().replace(/^@/, ""), offset: spinUsersOffset,
   });
-  const select = byId("testUserSelect");
+  const select = byId("spinUserSelect");
+  const selected = select.value;
   select.replaceChildren();
   for (const user of result.users) {
     const option = document.createElement("option");
     option.value = user.telegram_id;
-    option.textContent = `${user.first_name || "Участник"}${
-      user.username ? ` (@${user.username})` : ""
-    } | ID ${user.telegram_id} | Остаток: ${user.test_remaining}`;
-    option.dataset.remaining = user.test_remaining;
+    option.textContent = `${user.first_name || "Участник"}${user.username ? ` (@${user.username})` : ""} | ID ${user.telegram_id} | Сегодня использовано: ${user.spins_used} | Осталось: ${user.spins_remaining}`;
     select.append(option);
   }
-  byId("prevTestUsersButton").disabled = testUsersOffset === 0;
-  byId("nextTestUsersButton").disabled = !result.has_more;
-  byId("setTestAttemptsButton").disabled = result.users.length === 0;
-  byId("testUsersNote").textContent = result.users.length
-    ? "Выберите пользователя. Сохранение заменит остаток, а не добавит попытки."
+  if ([...select.options].some((option) => option.value === selected)) select.value = selected;
+  byId("prevSpinUsersButton").disabled = spinUsersOffset === 0;
+  byId("nextSpinUsersButton").disabled = !result.has_more;
+  byId("resetDailySpinsButton").disabled = result.users.length === 0;
+  byId("spinUsersNote").textContent = result.users.length
+    ? `Попытки за ${result.spinDate.split("-").reverse().join(".")} (МСК). После сброса игроку нужно нажать «Обновить попытки» или заново открыть Mini App.`
     : "Пользователи не найдены. Они появятся после первого входа в Mini App.";
 }
-async function searchTestUsers(offset) {
-  testUsersOffset = offset;
-  try {
-    await loadTestUsers();
-  } catch (error) {
-    message(error.message);
-  }
+async function searchSpinUsers(offset) {
+  spinUsersOffset = offset;
+  try {await loadSpinUsers();} catch (error) {message(error.message);}
 }
-byId("findTestUsersButton").addEventListener("click", () => searchTestUsers(0));
-byId("prevTestUsersButton").addEventListener(
-  "click",
-  () => searchTestUsers(Math.max(0, testUsersOffset - 25)),
-);
-byId("nextTestUsersButton").addEventListener(
-  "click",
-  () => searchTestUsers(testUsersOffset + 25),
-);
-byId("testUserSearch").addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
-    event.preventDefault();
-    searchTestUsers(0);
-  }
+byId("findSpinUsersButton").addEventListener("click", () => searchSpinUsers(0));
+byId("prevSpinUsersButton").addEventListener("click", () => searchSpinUsers(Math.max(0, spinUsersOffset - 25)));
+byId("nextSpinUsersButton").addEventListener("click", () => searchSpinUsers(spinUsersOffset + 25));
+byId("spinUserSearch").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {event.preventDefault(); searchSpinUsers(0);}
 });
-byId("testUserSelect").addEventListener("change", () => {
-  const option = byId("testUserSelect").selectedOptions[0];
-  if (option) byId("testAttempts").value = option.dataset.remaining;
-});
-byId("setTestAttemptsButton").addEventListener("click", async () => {
-  const telegram_id = byId("testUserSelect").value;
-  const attempts = Number(byId("testAttempts").value);
-  if (
-    !telegram_id || !byId("testAttempts").value.trim() ||
-    !Number.isInteger(attempts) || attempts < 0 || attempts > 100
-  ) {
-    message("Выберите пользователя и остаток от 0 до 100.");
-    return;
-  }
-  const button = byId("setTestAttemptsButton");
-  button.disabled = true;
+byId("resetDailySpinsButton").addEventListener("click", async () => {
+  const telegram_id = byId("spinUserSelect").value;
+  if (!telegram_id) {message("Выберите пользователя."); return;}
+  const button = byId("resetDailySpinsButton"); button.disabled = true;
   try {
-    await adminApi("admin_set_test_spins", { telegram_id, attempts });
-    await loadTestUsers();
-    byId("testUserSelect").value = telegram_id;
-    message(
-      `Тестовый остаток для ID ${telegram_id}: ${attempts}. Реальные попытки не изменены.`,
-    );
-  } catch (error) {
-    message(error.message);
-  } finally {
-    button.disabled = byId("testUserSelect").options.length === 0;
-  }
+    const requestId = resetRequestId(telegram_id);
+    const result = await adminApi("admin_reset_daily_spins", {telegram_id, requestId});
+    await loadSpinUsers();
+    clearResetRequest(telegram_id);
+    message(`${result.replayed ? "Ранее выполненный сброс подтверждён" : "Прокрутки сброшены"} для ID ${telegram_id} за ${result.spinDate.split("-").reverse().join(".")}. Призы сохранены. Актуальный остаток показан в списке.`);
+  } catch (error) {message(error.message);}
+  finally {button.disabled = !adminToken || byId("spinUserSelect").options.length === 0;}
 });
 
 function isWinningPrize(prize) {

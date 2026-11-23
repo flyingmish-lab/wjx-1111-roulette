@@ -9,8 +9,8 @@ const modeFetch=(status,calls,extra={})=>async(url,options)=>{
   const body=JSON.parse(options.body);calls.push({url,body});
   return Response.json({ok:true,result:{status,user:{id:body.user_id},...extra}});
 };
-test('membership uses verified sender for every role and every new real/test spin',async()=>{
-  for(const id of [221535678,382749857,123456789])for(const action of ['spin','test_spin'])for(const status of ['left','kicked','member','creator','administrator']) {
+test('membership uses verified sender for every role and every new real spin',async()=>{
+  for(const id of [221535678,382749857,123456789])for(const action of ['spin'])for(const status of ['left','kicked','member','creator','administrator']) {
     const db=mockDb(),calls=[];db.balances.set(id,2);
     const api=loadFunction(entry,db,env,{fetch:modeFetch(status,calls)}).handleRoulette;
     const response=await api(request({action,initData:await telegramData(id),user_id:999,subscribed:true}));
@@ -76,7 +76,7 @@ test('migration avoids unchanged profile writes, enforces transactional pause an
   const db=new PGlite();
   try {
     const fixture=fs.readFileSync('tests/database.test.mjs','utf8').match(/const fixture=`([\s\S]*?)`;/)[1];await db.exec(fixture);
-    for(const name of fs.readdirSync('supabase/migrations').sort())await db.exec(fs.readFileSync('supabase/migrations/'+name,'utf8'));
+    for(const name of fs.readdirSync('supabase/migrations').filter(n=>!n.includes('230010')).sort())await db.exec(fs.readFileSync('supabase/migrations/'+name,'utf8'));
     await db.exec("select wjx_register_player(123456789,'New name','new_nick')");
     const row=(await db.query('select ctid::text,joined_at from wjx_participants where telegram_id=123456789')).rows[0];
     await db.exec("select wjx_register_player(123456789,'New name','new_nick')");

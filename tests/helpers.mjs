@@ -10,7 +10,9 @@ export const baseSettings = { event_start: '2000-01-01', event_end: '2099-12-31'
 export const prizes = ['Картридж', 'Расходники', 'Noir Blade', 'Soul Ink', 'Бандажка', 'Без выигрыша', 'Мерч WJX'].map((prize, i) => ({prize, chance: i === 6 ? 0 : i === 5 ? 50 : 10, prize_limit: [20,30,3,20,50,null,10][i]}));
 
 export function mockDb() {
-  const db = { prizes: prizes.map(p=>({...p})), sessions: new Map(), balances: new Map(), eventWinCount: 0, operations: new Map(), deliveries: new Map(), realSpinsUsed: 1, dailyHistory: [{prize:'Без выигрыша',spinNumber:1}], calls: [], attempts: 0, settings: {...baseSettings}, failLimiter: false, failSessions: false,
+  const currentDay=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(db.serverNow||Date.now()));
+  const baseline=id=>db.baselines.get(id+':'+currentDay())||0;
+  const db = { resets: new Map(), baselines: new Map(), prizes: prizes.map(p=>({...p})), sessions: new Map(), balances: new Map(), eventWinCount: 0, operations: new Map(), deliveries: new Map(), realSpinsUsed: 1, dailyHistory: [{prize:'Без выигрыша',spinNumber:1}], calls: [], attempts: 0, settings: {...baseSettings}, failLimiter: false, failSessions: false,
     async rpc(name, args) {
       db.calls.push({ rpc: name, args });
       if (name === 'wjx_register_player') return {data:null};
@@ -23,9 +25,9 @@ export function mockDb() {
         const date = new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(now));
         const moment = new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(now));
         const summary = (await db.rpc('wjx_user_prize_summary',args)).data;
-        return {data:{serverNow:now,serverDate:date,settings:{...db.settings},spinsUsed:db.realSpinsUsed,
-          spinsRemaining:Math.max(0,db.settings.daily_spins-db.realSpinsUsed),testRemaining:db.balances.get(args.p_telegram_id)||0,
-          eventSummary:summary,dailyHistory:db.dailyHistory.map(h=>({...h,spinDate:date})),
+        return {data:{serverNow:now,serverDate:date,settings:{...db.settings},spinsUsed:db.realSpinsUsed-baseline(args.p_telegram_id),
+          spinsRemaining:Math.max(0,db.settings.daily_spins-db.realSpinsUsed+baseline(args.p_telegram_id)),
+          eventSummary:summary,dailyHistory:db.dailyHistory.filter(h=>h.spinNumber>baseline(args.p_telegram_id)).map(h=>({...h,spinNumber:h.spinNumber-baseline(args.p_telegram_id),spinDate:date})),
           eventStatus:moment < db.settings.event_start+' '+db.settings.start_time.slice(0,5)?'before':moment > db.settings.event_end+' '+db.settings.end_time.slice(0,5)?'finished':'active',
           pendingOperation:db.operations.get(args.p_telegram_id+':'+args.p_request_id)?.result||null}};
       }
@@ -41,7 +43,7 @@ export function mockDb() {
         } else {
           const moment=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(db.serverNow||Date.now()));
           if(moment < db.settings.event_start+' '+db.settings.start_time.slice(0,5)||moment > db.settings.event_end+' '+db.settings.end_time.slice(0,5))return {error:{code:'P0002'}};
-          if(db.realSpinsUsed>=db.settings.daily_spins)return {error:{code:'P0001'}};
+          if(db.realSpinsUsed-baseline(args.p_telegram_id)>=db.settings.daily_spins)return {error:{code:'P0001'}};
           const saved=await db.rpc('wjx_save_spin',args);if(saved.error)return saved;
           extra={spinNumber:saved.data[0].spin_number,spinsRemaining:saved.data[0].spins_remaining};
         }
@@ -51,15 +53,21 @@ export function mockDb() {
       if (name === 'wjx_consume_admin_login_attempt') return db.failLimiter ? {error:{code:'db_error'}} : { data:[{allowed: ++db.attempts <= 10, retry_after:900}] };
       if (name === 'wjx_event_winners') return {data:{period:db.settings,winners:[{telegram_id:'123456789',first_name:'Player',username:'player',total_wins:3}],has_more:false}};
       if (name === 'wjx_user_prize_summary') return {data:{participant:{telegram_id:String(args.p_telegram_id),username:'player',first_name:'Player'},period:db.settings,total_wins:db.eventWinCount,can_deliver:!!db.canDeliver,delivered_count:db.deliveries.get(args.p_telegram_id)||0,remaining_count:db.eventWinCount-(db.deliveries.get(args.p_telegram_id)||0),delivered_prizes:[],prizes:db.eventWinCount?[{prize:'Картридж',quantity:db.eventWinCount}]:[],daily:db.eventWinCount?[{spin_date:'2026-11-27',prize:'Картридж',quantity:db.eventWinCount}]:[]}};
-      if (name === 'wjx_admin_test_users') return {data:{users:[{telegram_id:'123456789',first_name:'Player',username:'player',test_remaining:db.balances.get(123456789)??0}],has_more:false}};
-      if (name === 'wjx_set_test_spins') {db.balances.set(args.p_telegram_id,args.p_attempts);return {data:args.p_attempts};}
+      if (name === 'wjx_admin_spin_users') return {data:{spinDate:currentDay(),users:[{telegram_id:'123456789',first_name:'Player',username:'player',spins_used:db.realSpinsUsed-baseline(123456789),spins_remaining:Math.max(0,db.settings.daily_spins-db.realSpinsUsed+baseline(123456789))}],has_more:false}};
+      if (name === 'wjx_reset_daily_spins') {
+        const old=db.resets.get(args.p_request_id);
+        if(old)return old.telegram_id===String(args.p_telegram_id)?{data:{...old,replayed:true}}:{error:{code:'22023'}};
+        if(args.p_telegram_id!==123456789)return {error:{code:'P0002'}};
+        db.baselines.set(args.p_telegram_id+':'+currentDay(),db.realSpinsUsed);
+        const result={resetId:args.p_request_id,telegram_id:String(args.p_telegram_id),spinDate:currentDay(),spinsRemaining:db.settings.daily_spins,replayed:false};db.resets.set(args.p_request_id,result);return {data:result};
+      }
       if (name === 'wjx_use_test_spin') {
         const n=db.balances.get(args.p_telegram_id)??0;
         if(n<=0) return {error:{code:'P0001'}};
         db.balances.set(args.p_telegram_id,n-1);return {data:n-1};
       }
       if (name === 'wjx_admin_prize_stats') return {data:{limitScope:'day',stockDate:'2026-11-23',prizes:db.prizes.map(p=>({...p,realWins:1200,todayWins:2,testWins:2,remainingToday:p.prize_limit==null?null:Math.max(0,p.prize_limit-2)})),history:[]}};
-      if (name === 'wjx_save_spin') {db.realSpinsUsed++;db.dailyHistory.push({prize:args.p_prize,spinNumber:db.realSpinsUsed});if(args.p_prize!=='Без выигрыша')db.eventWinCount++;return {data:[{spin_number:db.realSpinsUsed,spins_remaining:db.settings.daily_spins-db.realSpinsUsed}]};}
+      if (name === 'wjx_save_spin') {db.realSpinsUsed++;db.dailyHistory.push({prize:args.p_prize,spinNumber:db.realSpinsUsed});if(args.p_prize!=='Без выигрыша')db.eventWinCount++;return {data:[{spin_number:db.realSpinsUsed-baseline(args.p_telegram_id),spins_remaining:db.settings.daily_spins-db.realSpinsUsed+baseline(args.p_telegram_id)}]};}
       throw Error('Unexpected RPC');
     },
     from(table) {

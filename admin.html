@@ -152,29 +152,25 @@
             <section id="winnerDetails" hidden aria-live="polite"></section>
           </div>
           <div class="card">
-            <h2>Тестовые попытки пользователей</h2>
-            <p>Отдельные попытки без выдачи призов. Реальный дневной лимит не меняется.</p>
+            <h2>Прокрутки пользователей</h2>
+            <p>Сброс вернёт выбранному пользователю дневные попытки за сегодня по Москве. Призы и расход дневного запаса сохранятся. Играть можно только во время розыгрыша.</p>
             <label
-              for="testUserSearch">Найти по имени, username или Telegram ID</label>
-            <input id="testUserSearch" type="search" maxlength="100">
-            <button id="findTestUsersButton"
+              for="spinUserSearch">Найти по имени, username или Telegram ID</label>
+            <input id="spinUserSearch" type="search" maxlength="100">
+            <button id="findSpinUsersButton"
               type="button">Найти пользователей</button>
-            <label for="testUserSelect">Пользователь</label>
-            <select id="testUserSelect"
+            <label for="spinUserSelect">Пользователь</label>
+            <select id="spinUserSelect"
               style="width:100%;padding:12px"></select>
             <div style="display:flex;gap:8px;margin-top:12px">
-              <button id="prevTestUsersButton" type="button"
+              <button id="prevSpinUsersButton" type="button"
                 disabled>Назад</button>
-              <button id="nextTestUsersButton" type="button"
+              <button id="nextSpinUsersButton" type="button"
                 disabled>Далее</button>
             </div>
-            <label
-              for="testAttempts">Установить остаток тестовых попыток (0 — отключить)</label>
-            <input id="testAttempts" type="number" min="0" max="100" step="1"
-              value="3">
-            <button id="setTestAttemptsButton" type="button"
-              style="margin-top:12px">Сохранить тестовые попытки</button>
-            <p id="testUsersNote" role="status"></p>
+            <button id="resetDailySpinsButton" type="button"
+              style="margin-top:12px">Сбросить прокрутки за сегодня</button>
+            <p id="spinUsersNote" role="status"></p>
           </div>
           <div class="card">
             <h2>📅 Даты розыгрыша</h2>
@@ -242,6 +238,6 @@
       </section>
     </main>
 
-    <script src="admin.js?v=20261123-daily-stock-merch" defer></script>
+    <script src="admin.js?v=20261123-real-spins-reset" defer></script>
   </body>
 </html>

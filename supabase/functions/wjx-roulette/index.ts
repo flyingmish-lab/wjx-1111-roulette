@@ -149,6 +149,8 @@ async function roulette(req: Request): Promise<Response> {
     "admin_mark_prizes_delivered",
     "admin_get_winners",
     "admin_get_user_wins",
+    "admin_spin_users",
+    "admin_reset_daily_spins",
     "admin_test_users",
     "admin_set_test_spins",
     "admin_get_settings",
@@ -186,6 +188,9 @@ async function roulette(req: Request): Promise<Response> {
         401,
       );
     }
+  }
+  if (["admin_test_users", "admin_set_test_spins"].includes(action)) {
+    return json({ success: false, error: "Тестовый режим отключён. Обновите админ-панель." }, 403);
   }
   if (action === "admin_subscription_status") {
     return json({
@@ -330,6 +335,7 @@ async function roulette(req: Request): Promise<Response> {
       );
     }
   }
+  if (action === "test_spin") return json({ success: false, error: "Тестовые прокрутки отключены. Обновите Mini App." }, 403);
   if (action === "check_subscription") {
     const subscribed = await isChannelSubscriber(
       telegramBotToken ?? "",
@@ -359,7 +365,7 @@ async function roulette(req: Request): Promise<Response> {
       eventWinCount: Number(data.eventSummary.total_wins ?? 0),
     };
   }
-  if (action === "status" || action === "spin" || action === "test_spin") {
+  if (action === "status" || action === "spin") {
     if (
       (operationId !== undefined || action !== "status") &&
       !validOperationId(operationId)
@@ -372,7 +378,7 @@ async function roulette(req: Request): Promise<Response> {
     if (action === "status") {
       return json({ success: true, ...await playerState() });
     }
-    const isTest = action === "test_spin";
+    const isTest = false;
     // Return already committed results even after the event ends or chances change.
     const { data: previous, error: lookupError } = await supabase.from(
       "wjx_spin_operations",
@@ -416,9 +422,7 @@ async function roulette(req: Request): Promise<Response> {
               error: error.code === "P0003"
                 ? "Рулетка временно приостановлена. Попробуйте позже."
                 : error.code === "P0001"
-                ? (isTest
-                  ? "Доступные прокрутки закончились"
-                  : "На сегодня лимит попыток исчерпан")
+                ? "На сегодня лимит попыток исчерпан"
                 : error.code === "P0002"
                 ? "Розыгрыш сейчас недоступен"
                 : "Некорректная операция",
@@ -513,7 +517,7 @@ async function roulette(req: Request): Promise<Response> {
     return json({ success: true, ...data });
   }
 
-  if (action === "admin_test_users") {
+  if (action === "admin_spin_users") {
     const search = requestData.search ?? "";
     const offset = requestData.offset ?? 0;
     if (
@@ -522,34 +526,26 @@ async function roulette(req: Request): Promise<Response> {
     ) {
       return json({ success: false, error: "Некорректный поиск" }, 400);
     }
-    const { data, error } = await supabase.rpc("wjx_admin_test_users", {
+    const { data, error } = await supabase.rpc("wjx_admin_spin_users", {
       p_search: search,
       p_offset: offset,
     });
     if (error || !data) throw new Error("User list unavailable");
     return json({ success: true, ...data });
   }
-  if (action === "admin_set_test_spins") {
+  if (action === "admin_reset_daily_spins") {
     const id = Number(requestData.telegram_id);
-    const attempts = requestData.attempts;
-    if (
-      !Number.isSafeInteger(id) || id <= 0 || !Number.isInteger(attempts) ||
-      attempts < 0 || attempts > 100
-    ) {
-      return json({
-        success: false,
-        error: "Выберите пользователя и остаток от 0 до 100",
-      }, 400);
+    const requestId = requestData.requestId;
+    if (!Number.isSafeInteger(id) || id <= 0 || !validOperationId(requestId)) {
+      return json({ success: false, error: "Выберите пользователя и обновите запрос сброса." }, 400);
     }
-    const { data, error } = await supabase.rpc("wjx_set_test_spins", {
-      p_telegram_id: id,
-      p_attempts: attempts,
+    const { data, error } = await supabase.rpc("wjx_reset_daily_spins", {
+      p_telegram_id: id, p_request_id: requestId, p_admin_session_hash: adminSessionHash,
     });
-    if (error?.code === "P0002") {
-      return json({ success: false, error: "Пользователь не найден" }, 404);
-    }
-    if (error) throw new Error("Test allocation failed");
-    return json({ success: true, testRemaining: data });
+    if (error?.code === "P0002") return json({ success: false, error: "Пользователь не найден" }, 404);
+    if (error?.code === "22023") return json({ success: false, error: "Некорректный запрос сброса" }, 400);
+    if (error || !data) throw new Error("Daily reset unavailable");
+    return json({ success: true, ...data });
   }
   if (action === "admin_save_prize_chances") {
     if (requestData.limitScope !== "day") {

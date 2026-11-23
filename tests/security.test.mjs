@@ -55,7 +55,7 @@ test('database outages and missing configuration fail closed',async()=>{
 test('every admin API rejects Telegram-only, unsigned, expired and revoked sessions',async()=>{
   const {db,s,roulette}=await setup();
   const owner=await telegramData(221535678);
-  for(const action of ['admin_get_settings','admin_save_settings','admin_get_prizes','admin_save_prize_chances','admin_test_users','admin_set_test_spins','admin_get_winners','admin_get_user_wins','admin_mark_prizes_delivered','admin_bot_status','admin_configure_bot','admin_set_pause','admin_subscription_status']) {
+  for(const action of ['admin_get_settings','admin_save_settings','admin_get_prizes','admin_save_prize_chances','admin_test_users','admin_set_test_spins','admin_spin_users','admin_reset_daily_spins','admin_get_winners','admin_get_user_wins','admin_mark_prizes_delivered','admin_bot_status','admin_configure_bot','admin_set_pause','admin_subscription_status']) {
     const before=db.calls.length;
     assert.equal((await roulette(request({action,initData:owner}))).status,401);
     assert.equal(db.calls.length,before,'no DB access before authentication');
@@ -119,22 +119,12 @@ test('retired rapid-action cannot be used as an unthrottled password oracle',asy
   assert.deepEqual(await correct.json(),await wrong.json());assert.equal(db.calls.length,0);
 });
 
-test('only browser admin allocates tests; tests cannot spend another user balance or alter real attempts',async()=>{
-  const {db,s,roulette}=await setup();
-  const player=await telegramData(123456789), owner=await telegramData(221535678);
-  assert.equal((await roulette(request({action:'admin_set_test_spins',initData:owner,telegram_id:123456789,attempts:3}))).status,401);
-  assert.equal((await roulette(request({action:'admin_test_users'},s.token))).status,200);
-  for(const attempts of [-1,101,1.5,'3']) assert.equal((await roulette(request({action:'admin_set_test_spins',telegram_id:123456789,attempts},s.token))).status,400);
-  assert.equal((await roulette(request({action:'admin_set_test_spins',telegram_id:123456789,attempts:2},s.token))).status,200);
-  db.settings.event_start='2099-01-01';
-  assert.equal((await roulette(request({action:'test_spin',initData:owner,telegram_id:123456789}))).status,429);
-  for(let n=1;n>=0;n--) {
-    const response=await roulette(request({action:'test_spin',initData:player}));
-    assert.equal(response.status,200);const data=await response.json();assert.equal(data.isTest,true);assert.equal(data.testRemaining,n);
-  }
-  assert.equal((await roulette(request({action:'test_spin',initData:player}))).status,429);
-  assert.equal(db.calls.some(c=>c.rpc==='wjx_save_spin'),false);
-  assert.equal((await roulette(request({action:'spin',initData:player}))).status,403);
+test('retired test endpoints never allocate attempts or spend an archived balance',async()=>{
+ const {db,s,roulette}=await setup();db.balances.set(123456789,9);
+ for(const action of ['admin_test_users','admin_set_test_spins'])assert.equal((await roulette(request({action,telegram_id:123456789,attempts:3},s.token))).status,403);
+ assert.equal((await roulette(request({action:'test_spin',initData:await telegramData(123456789)}))).status,403);
+ assert.equal(db.balances.get(123456789),9);assert.equal(db.operations.size,0);
+ assert.equal(db.calls.some(c=>c.rpc==='wjx_use_test_spin'||c.rpc==='wjx_set_test_spins'),false);
 });
 
 test('winner lookup requires admin authorization, validates inputs and binds player summaries to verified identity',async()=>{
@@ -162,7 +152,7 @@ test('operation IDs bind retries to the verified player and mode, even after the
   const retry=await spin();assert.equal(retry.status,200);const recovered=await retry.json();
   assert.equal(recovered.prize,first.prize);assert.equal(recovered.operationId,id);assert.equal(recovered.replayed,true);
   assert.equal(db.calls.filter(c=>c.rpc==='wjx_save_spin').length,1);
-  assert.equal((await roulette(request({action:'test_spin',initData,operationId:id}))).status,409);
+  assert.equal((await roulette(request({action:'test_spin',initData,operationId:id}))).status,403);
   assert.equal([...db.operations.keys()][0],'123456789:'+id);
 });
 test('a committed spin remains recoverable when the subsequent state query fails',async()=>{

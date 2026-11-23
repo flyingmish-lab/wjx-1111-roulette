@@ -738,6 +738,7 @@ background-attachment: fixed;
   </section>
   <p id="pauseNotice" hidden role="status">Рулетка временно приостановлена. Попробуйте позже. Ваши выигрыши сохранены.</p>
   <p id="limitMessage" hidden role="status" style="margin:16px;padding:16px;background:#fff4d5;border-radius:12px"></p>
+  <button id="refreshAttemptsButton" type="button" hidden>Обновить попытки</button>
   <section id="gameStatusPanel" style="margin:16px;padding:16px;background:#fff4d5;border-radius:12px" aria-live="polite">
     <p id="connectionNote" role="status">Загружаем игру…</p>
     <button id="retryLoadButton" type="button" hidden>Повторить загрузку</button>
@@ -786,7 +787,6 @@ let serverStatusLoaded = false;
 let state = null;
 let serverAnchor = 0;
 let performanceAnchor = 0;
-let testLeverMode = null;
 let refreshing = null;
 let pending = readPending();
 function readPending() {
@@ -794,7 +794,7 @@ function readPending() {
     const value = JSON.parse(localStorage.getItem(pendingKey) || "null");
     if (
       value && typeof value.operationId === "string" &&
-      typeof value.isTest === "boolean" &&
+      value.isTest === false &&
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
         .test(value.operationId)
     ) {
@@ -870,7 +870,6 @@ function applyState(value) {
   serverAnchor = Date.parse(value.serverNow);
   performanceAnchor = performance.now();
   serverStatusLoaded = true;
-  if (testLeverMode === null && value.testRemaining > 0) testLeverMode = true;
   if (pending && value.pendingOperation?.operationId === pending.operationId) {
     showResult(value.pendingOperation, true);
     pending = null;
@@ -881,16 +880,15 @@ function applyState(value) {
 function render() {
   const status = getEventStatus();
   const finished = status === "finished";
-  const testing = testLeverMode === true;
-  const dailyLimitReached = serverStatusLoaded && !testing && state?.spinsRemaining <= 0;
-  const showMachine = testing || !finished;
+  const dailyLimitReached = serverStatusLoaded && state?.spinsRemaining <= 0;
+  const showMachine = !finished;
   byId("finishedMessage").style.display = showMachine ? "none" : "flex";
   document.querySelector(".reels").style.display = showMachine ? "" : "none";
   document.querySelector(".lever").style.display = showMachine ? "" : "none";
   byId("eventFinalScreen").style.display = "none";
   byId("bottomCounter").style.display = finished ? "none" : "";
   byId("claimPrizeButton").style.display =
-    finished && !testing && serverStatusLoaded &&
+    finished && serverStatusLoaded &&
       state?.eventSummary.total_wins > 0
       ? "block"
       : "none";
@@ -915,6 +913,8 @@ function render() {
   byId("attemptsCounter").textContent = counter;
   byId("bottomCounter").textContent = counter;
   byId("limitMessage").hidden = !dailyLimitReached || status !== "active" || spinning || !!pending;
+  byId("refreshAttemptsButton").hidden = byId("limitMessage").hidden;
+  byId("refreshAttemptsButton").disabled = spinning || !!refreshing;
   byId("limitMessage").textContent = "На сегодня все прокрутки использованы." +
     (state && getMoscowDate() < state.settings.event_end ? " Возвращайтесь завтра!" : "");
   const prizes = byId("myPrizes");
@@ -952,9 +952,7 @@ function showResult(result, recovered = false) {
   const text = `${recovered ? "Восстановленный результат" : "Результат"} ${
     result.spinDate.split("-").reverse().join(".")
   }: ${prizeLabel(result.prize)}`;
-  if (result.isTest) {
-    byId("lastSpinResult").textContent = "Прокрутка завершена.";
-  } else byId("lastSpinResult").textContent = text;
+  byId("lastSpinResult").textContent = text;
 }
 async function api(body) {
   if (!telegramInitData) throw Error("Откройте рулетку через Telegram.");
@@ -1026,10 +1024,11 @@ async function loadServerStatus() {
     await refreshing;
   } finally {
     refreshing = null;
+    render();
     scheduleRefresh();
   }
 }
-async function playSpin(isTest = false, recover = false) {
+async function playSpin(recover = false) {
   if (spinning) return;
   if (pending && !recover) {
     note("Сначала проверьте результат предыдущей прокрутки.");
@@ -1045,7 +1044,7 @@ async function playSpin(isTest = false, recover = false) {
       note("Рулетка временно приостановлена. Попробуйте позже.");
       return;
     }
-    if (!isTest && getEventStatus() !== "active") {
+    if (getEventStatus() !== "active") {
       alert(
         getEventStatus() === "before"
           ? `🎰 Розыгрыш начнётся ${state.settings.event_start} в ${
@@ -1055,15 +1054,11 @@ async function playSpin(isTest = false, recover = false) {
       );
       return;
     }
-    if (isTest && state.testRemaining <= 0) {
-      byId("lastSpinResult").textContent = "Доступные прокрутки закончились.";
-      return;
-    }
-    if (!isTest && state.spinsRemaining <= 0) {
+    if (state.spinsRemaining <= 0) {
       render();
       return;
     }
-    pending = { operationId: newOperationId(), isTest };
+    pending = { operationId: newOperationId(), isTest: false };
     savePending();
   }
   const operation = { ...pending };
@@ -1072,12 +1067,12 @@ async function playSpin(isTest = false, recover = false) {
   note(recover ? "Проверяем сохранённый результат…" : "Сохраняем прокрутку…");
   try {
     const result = await api({
-      action: operation.isTest ? "test_spin" : "spin",
+      action: "spin",
       operationId: operation.operationId,
     });
     if (
       result.operationId !== operation.operationId ||
-      result.isTest !== operation.isTest
+      result.isTest !== false
     ) throw Error("Не удалось подтвердить результат.");
     byId("subscriptionPanel").hidden = true;
     // Show committed results before animation, without depending on optional storage.
@@ -1127,13 +1122,14 @@ async function playSpin(isTest = false, recover = false) {
     scheduleRefresh();
   }
 }
-button.addEventListener("click", () => playSpin(testLeverMode === true));
+byId("refreshAttemptsButton").addEventListener("click", () => loadServerStatus());
+button.addEventListener("click", () => playSpin());
 lever.addEventListener("click", () => {
   if (spinning || lever.disabled) return;
   lever.classList.remove("pulling");
   void lever.offsetWidth;
   lever.classList.add("pulling");
-  playSpin(testLeverMode === true);
+  playSpin();
 });
 lever.addEventListener("animationend", (event) => {
   if (event.target === lever.querySelector(".lever-stick")) {
@@ -1141,12 +1137,12 @@ lever.addEventListener("animationend", (event) => {
   }
 });
 byId("recoverSpinButton").addEventListener("click", () => {
-  if (pending) playSpin(pending.isTest, true);
+  if (pending) playSpin(true);
 });
 byId("retryLoadButton").addEventListener("click", () => loadServerStatus());
 byId("claimPrizeButton").addEventListener("click", () => {
   if (
-    getEventStatus() !== "finished" || testLeverMode === true ||
+    getEventStatus() !== "finished" ||
     !serverStatusLoaded || !state?.eventSummary.total_wins
   ) return;
   if (window.Telegram?.WebApp?.openTelegramLink) {
@@ -1164,7 +1160,7 @@ function scheduleRefresh() {
   clearTimeout(refreshTimer);
   if (document.hidden || !telegramInitData) return;
   const idle = state && !pending && !state.settings.spins_paused &&
-    (getEventStatus() !== "active" || (state.spinsRemaining <= 0 && !state.testRemaining));
+    (getEventStatus() !== "active" || state.spinsRemaining <= 0);
   let delay = (idle ? 300000 : 60000) * (1 + Math.random() * 0.15);
   if (state) {
     const today = getMoscowDate();

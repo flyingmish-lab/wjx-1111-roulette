@@ -1,3 +1,4 @@
+-- Requires schema migration 010. Before its first deployment use the previous published export.
 -- Read-only application backup. Does not export Supabase Secrets, Auth or Storage.
 select 'tables' section, coalesce(jsonb_agg(jsonb_build_object(
   'name',c.relname,'rls',c.relrowsecurity,'force_rls',c.relforcerowsecurity,
@@ -19,5 +20,6 @@ union all select 'data:wjx_spin_operations',coalesce(jsonb_agg(to_jsonb(t)),'[]'
 union all select 'data:wjx_prize_deliveries',coalesce(jsonb_agg(to_jsonb(t)),'[]')::text from public.wjx_prize_deliveries t
 union all select 'data:wjx_admin_login_attempts',coalesce(jsonb_agg(to_jsonb(t)),'[]')::text from public.wjx_admin_login_attempts t
 union all select 'data:wjx_admin_sessions',coalesce(jsonb_agg(to_jsonb(t)),'[]')::text from public.wjx_admin_sessions t
+union all select 'data:wjx_admin_spin_resets',coalesce(jsonb_agg(to_jsonb(t)),'[]')::text from public.wjx_admin_spin_resets t
 union all select 'sequence_grants',coalesce(jsonb_agg(jsonb_build_object('sequence',c.relname,'role',case when x.grantee=0 then 'PUBLIC' else pg_get_userbyid(x.grantee) end,'privilege',x.privilege_type)),'[]')::text from pg_class c join pg_namespace n on n.oid=c.relnamespace cross join lateral aclexplode(coalesce(c.relacl,acldefault('S',c.relowner))) x where n.nspname='public' and c.relkind='S'
 union all select 'triggers',coalesce(jsonb_agg(pg_get_triggerdef(t.oid)),'[]')::text from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and not t.tgisinternal;

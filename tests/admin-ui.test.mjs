@@ -121,18 +121,23 @@ test('participant names and prize history are rendered as text',async()=>{
   } finally {ui.dom.window.close();}
 });
 
-test('admin selects an existing user and sets or revokes a test balance',async()=>{
-  const ui=setup();try {
-    await ui.login();
-    assert.equal(ui.el('testUserSelect').value,'123456789');
-    ui.el('testAttempts').value='7';ui.click('setTestAttemptsButton');
-    await until(()=>!ui.el('setTestAttemptsButton').disabled);
-    assert.equal(ui.db.balances.get(123456789),7);
-    ui.el('testAttempts').value='0';ui.click('setTestAttemptsButton');
-    await until(()=>!ui.el('setTestAttemptsButton').disabled);
-    assert.equal(ui.db.balances.get(123456789),0);
-    assert.equal(ui.db.settings.daily_spins,3);
-  } finally {ui.dom.window.close();}
+test('admin resets only today attempts of the selected user, preserving wins and retry identity after a lost response',async()=>{
+ const ui=setup();try{
+  ui.db.realSpinsUsed=3;ui.db.eventWinCount=2;await ui.login();
+  assert.equal(ui.el('spinUserSelect').value,'123456789');assert.equal(ui.el('testAttempts'),null);
+  assert.match(ui.el('spinUserSelect').textContent,/Сегодня использовано: 3/);
+  const original=ui.w.fetch;let lost=false;
+  ui.w.fetch=async(url,options)=>{const response=await original(url,options);if(JSON.parse(options.body).action==='admin_reset_daily_spins'&&!lost){lost=true;throw Error('lost response');}return response;};
+  ui.click('resetDailySpinsButton');await until(()=>!ui.el('resetDailySpinsButton').disabled);
+  assert.equal(ui.db.resets.size,1);assert.match(ui.el('statusMessage').textContent,/lost response/);
+  const savedId=ui.calls.find(c=>c.body.action==='admin_reset_daily_spins').body.requestId;
+  assert.equal(ui.w.sessionStorage.getItem('wjxDailyReset:123456789'),savedId);
+  ui.db.realSpinsUsed++;ui.click('resetDailySpinsButton');await until(()=>!ui.el('resetDailySpinsButton').disabled);
+  const resets=ui.calls.filter(c=>c.body.action==='admin_reset_daily_spins');assert.equal(resets.length,2);assert.equal(resets[1].body.requestId,savedId);
+  assert.equal(ui.db.resets.size,1);assert.equal(ui.db.eventWinCount,2);assert.equal(ui.db.settings.daily_spins,3);
+  assert.match(ui.el('spinUserSelect').textContent,/Осталось: 2/);assert.match(ui.el('statusMessage').textContent,/Призы сохранены/);
+  assert.equal(ui.w.sessionStorage.getItem('wjxDailyReset:123456789'),null);
+ }finally{ui.w.close();}
 });
 
 test('valid server sessions are accepted when device time is ahead or behind',async()=>{
@@ -227,4 +232,17 @@ test('daily probability calculator uses edited caps and attempt allowance withou
     merchLimit.value='';click('suggestPrizePlanButton');
     assert.match(el('statusMessage').textContent,/Безлимитные/);assert.equal(merchChance.value,'0.4');assert.equal(calls.length,before);
   } finally {w.close();}
+});
+test('reset retry keeps its UUID when the reset succeeded but user-list refresh failed',async()=>{
+ const ui=setup();try{
+  ui.db.realSpinsUsed=3;await ui.login();
+  const rpc=ui.db.rpc;let failed=false;
+  ui.db.rpc=async(name,args)=>{if(name==='wjx_admin_spin_users'&&ui.db.resets.size&&!failed){failed=true;return {error:{code:'unavailable'}};}return rpc(name,args);};
+  ui.click('resetDailySpinsButton');await until(()=>!ui.el('resetDailySpinsButton').disabled);
+  const saved=ui.calls.find(c=>c.body.action==='admin_reset_daily_spins').body.requestId;
+  assert.equal(ui.w.sessionStorage.getItem('wjxDailyReset:123456789'),saved);
+  ui.db.realSpinsUsed++;ui.click('resetDailySpinsButton');await until(()=>!ui.el('resetDailySpinsButton').disabled);
+  assert.equal(ui.db.resets.size,1);assert.equal(ui.calls.filter(c=>c.body.action==='admin_reset_daily_spins')[1].body.requestId,saved);
+  assert.match(ui.el('spinUserSelect').textContent,/Осталось: 2/);
+ }finally{ui.w.close();}
 });
