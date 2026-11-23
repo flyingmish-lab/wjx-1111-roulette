@@ -10,7 +10,7 @@ export const baseSettings = { event_start: '2000-01-01', event_end: '2099-12-31'
 export const prizes = ['Картридж', 'Расходники', 'Noir Blade', 'Soul Ink', 'Бандажка', 'Без выигрыша'].map((prize, i) => ({prize, chance: i === 5 ? 50 : 10}));
 
 export function mockDb() {
-  const db = { sessions: new Map(), balances: new Map(), eventWinCount: 0, operations: new Map(), deliveries: new Map(), realSpinsUsed: 1, dailyHistory: [{prize:'Без выигрыша',spinNumber:1}], calls: [], attempts: 0, settings: {...baseSettings}, failLimiter: false, failSessions: false,
+  const db = { prizes: prizes.map(p=>({...p})), sessions: new Map(), balances: new Map(), eventWinCount: 0, operations: new Map(), deliveries: new Map(), realSpinsUsed: 1, dailyHistory: [{prize:'Без выигрыша',spinNumber:1}], calls: [], attempts: 0, settings: {...baseSettings}, failLimiter: false, failSessions: false,
     async rpc(name, args) {
       db.calls.push({ rpc: name, args });
       if (name === 'wjx_register_player') return {data:null};
@@ -58,7 +58,7 @@ export function mockDb() {
         if(n<=0) return {error:{code:'P0001'}};
         db.balances.set(args.p_telegram_id,n-1);return {data:n-1};
       }
-      if (name === 'wjx_admin_prize_stats') return {data:{prizes:prizes.map(p=>({...p,realWins:1200,testWins:2})),history:[]}};
+      if (name === 'wjx_admin_prize_stats') return {data:{prizes:db.prizes.map(p=>({...p,realWins:1200,testWins:2,remaining:p.prize_limit==null?null:Math.max(0,p.prize_limit-1200)})),history:[]}};
       if (name === 'wjx_save_spin') {db.realSpinsUsed++;db.dailyHistory.push({prize:args.p_prize,spinNumber:db.realSpinsUsed});if(args.p_prize!=='Без выигрыша')db.eventWinCount++;return {data:[{spin_number:db.realSpinsUsed,spins_remaining:db.settings.daily_spins-db.realSpinsUsed}]};}
       throw Error('Unexpected RPC');
     },
@@ -84,7 +84,10 @@ export function mockDb() {
               if(call.operation==='update') Object.assign(db.settings,call.value);
               return {data:db.settings};
             }
-            if(table==='roulette_prize_chances') return {data:prizes};
+            if(table==='roulette_prize_chances') {
+              if(call.operation==='upsert')for(const value of call.value)Object.assign(db.prizes.find(p=>p.prize===value.prize),value);
+              return {data:db.prizes};
+            }
             if(table==='wjx_participants') return {};
             if(table==='wjx_test_balances') return {data:{remaining:db.balances.get(call.filters.telegram_id)??0}};
             if(table==='wjx_spins') return {count:db.realSpinsUsed};

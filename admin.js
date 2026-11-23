@@ -101,7 +101,7 @@ function renderChances() {
       type: "number",
       min: "0",
       max: "100",
-      step: "0.01",
+      step: "0.0001",
       value: item.chance,
       className: "prizeChanceInput",
     });
@@ -109,13 +109,26 @@ function renderChances() {
     input.addEventListener("input", updateTotal);
     label.append(input, " %");
     fields.append(label);
+    if (isWinningPrize(item.prize)) {
+      const limitLabel = document.createElement("label");
+      limitLabel.append("Максимум за весь розыгрыш:");
+      const limit = document.createElement("input");
+      Object.assign(limit, {type: "number", min: "0", max: "1000000", step: "1",
+        value: item.prize_limit ?? "", placeholder: "Без ограничения", className: "prizeLimitInput"});
+      limit.dataset.prize = item.prize;
+      limitLabel.append(limit);
+      fields.append(limitLabel);
+      const stock = document.createElement("p");
+      stock.textContent = `Выиграно: ${item.realWins} | Осталось: ${item.remaining ?? "без ограничения"}`;
+      fields.append(stock);
+    }
   }
   updateTotal();
 }
 function updateTotal() {
   const inputs = [...document.querySelectorAll(".prizeChanceInput")];
   const total = inputs.reduce((sum, input) => sum + Number(input.value), 0);
-  byId("prizeChancesTotal").textContent = `Итого: ${total.toFixed(2)}%`;
+  byId("prizeChancesTotal").textContent = `Итого: ${total.toFixed(4)}%`;
   byId("prizeChancesTotal").style.color = Math.abs(total - 100) <= 0.001
     ? "green"
     : "red";
@@ -140,7 +153,7 @@ async function loadPrizes() {
   ) {
     const line = document.createElement("p");
     line.textContent =
-      `${item.prize} — шанс ${item.chance}% | Выигрышей: ${item.realWins} | Тестовых (без призов): ${item.testWins}`;
+      `${item.prize} — шанс ${item.chance}% | Лимит: ${item.prize_limit ?? "без ограничения"} | Выигрышей: ${item.realWins} | Осталось: ${item.remaining ?? "без ограничения"} | Тестовых (без призов): ${item.testWins}`;
     panel.append(line);
   }
   const history = byId("winsHistory");
@@ -259,12 +272,30 @@ byId("saveButton").addEventListener("click", async () => {
     button.disabled = false;
   }
 });
+byId("suggestPrizePlanButton").addEventListener("click", () => {
+  const plan = {"Noir Blade": [0.0333, 3], "Картридж": [0.2222, 20],
+    "Бандажка": [0.5556, 50], "Soul Ink": [0.2222, 20], "Расходники": [0.3333, 30],
+    "Без выигрыша": [98.6334, null]};
+  for (const input of document.querySelectorAll(".prizeChanceInput")) input.value = plan[input.dataset.prize][0];
+  for (const input of document.querySelectorAll(".prizeLimitInput")) input.value = plan[input.dataset.prize][1];
+  updateTotal();
+  message("План подставлен. Проверьте значения и нажмите «Сохранить вероятности и лимиты».");
+});
 byId("savePrizeChancesButton").addEventListener("click", async () => {
   const inputs = [...document.querySelectorAll(".prizeChanceInput")];
   const prizes = inputs.map((input) => ({
     prize: input.dataset.prize,
     chance: Number(input.value),
+    prize_limit: null,
   }));
+  for (const limit of document.querySelectorAll(".prizeLimitInput")) {
+    const value = limit.value.trim();
+    if (limit.validity.badInput || (value && (!Number.isInteger(Number(value)) || Number(value) < 0 || Number(value) > 1000000))) {
+      message("Количество призов должно быть целым числом от 0 до 1000000. Пустое поле — без ограничения.");
+      return;
+    }
+    prizes.find((item) => item.prize === limit.dataset.prize).prize_limit = value ? Number(value) : null;
+  }
   if (
     inputs.length !== 6 || inputs.some((input) => !input.value.trim()) ||
     prizes.some((item) =>
@@ -280,7 +311,7 @@ byId("savePrizeChancesButton").addEventListener("click", async () => {
   try {
     await adminApi("admin_save_prize_chances", { prizes });
     await loadPrizes();
-    message("Вероятности сохранены.");
+    message("Вероятности сохранены. Лимиты призов сохранены.");
   } catch (error) {
     message(error.message);
   } finally {

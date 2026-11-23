@@ -202,11 +202,15 @@
             id="prizeChancesEditor"
             style="margin-bottom:20px; text-align:left;"
           >
-            <h3>🎯 Настройка вероятностей призов</h3>
+            <h3>🎯 Вероятности и количество призов</h3>
+            <p>Лимит общий на весь розыгрыш: уже записанные реальные выигрыши входят в него. Смена дат не обнуляет запас. Тестовые попытки запас не расходуют.</p>
+            <p>Пустое количество — без ограничения, 0 — приз недоступен. Когда запас закончится, выпадение этого приза станет «Без выигрыша». Лимит не гарантирует, что все призы будут выиграны.</p>
             <div id="prizeChancesFields"></div>
+            <button id="suggestPrizePlanButton" type="button">Подставить план на 9 000 прокруток</button>
+            <p>План для 1 000 участников в день × 3 дня × 3 попытки. Подставленные значения начнут действовать после сохранения.</p>
             <p id="prizeChancesTotal">Итого: —</p>
             <button id="savePrizeChancesButton" type="button">
-    💾 Сохранить вероятности
+    💾 Сохранить вероятности и лимиты
   </button>
           </div>
           <button
@@ -237,6 +241,6 @@
       </section>
     </main>
 
-    <script src="admin.js?v=20261120-launch-readiness" defer></script>
+    <script src="admin.js?v=20261123-prize-stock" defer></script>
   </body>
 </html>

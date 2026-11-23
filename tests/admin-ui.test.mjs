@@ -39,6 +39,29 @@ function setup({clockOffset=0,telegramFetch}={}) {
   return {db,dom,w,el,click,calls,login,expire:()=>expire(),expiryDelay:()=>expiryDelay};
 }
 
+test('prize stock plan is a draft until saved, validates caps and clears with the session',async()=>{
+  const {w,el,login,click,calls,expire}=setup();
+  try {
+    await login();
+    const limits=()=>[...w.document.querySelectorAll('.prizeLimitInput')];
+    assert.equal(limits().length,5);
+    const before=calls.length;click('suggestPrizePlanButton');
+    assert.equal(calls.length,before);
+    assert.equal(el('prizeChancesTotal').textContent,'Итого: 100.0000%');
+    assert.deepEqual(limits().map(i=>[i.dataset.prize,Number(i.value)]),[
+      ['Картридж',20],['Расходники',30],['Noir Blade',3],['Soul Ink',20],['Бандажка',50]]);
+    limits()[0].value='1.5';click('savePrizeChancesButton');
+    assert.equal(calls.length,before);assert.match(el('statusMessage').textContent,/целым/);
+    limits()[0].value='20';click('savePrizeChancesButton');
+    await until(()=>!el('savePrizeChancesButton').disabled);
+    const saved=calls.find(c=>c.body.action==='admin_save_prize_chances').body.prizes;
+    assert.equal(saved.find(p=>p.prize==='Noir Blade').chance,0.0333);
+    assert.equal(saved.find(p=>p.prize==='Noir Blade').prize_limit,3);
+    assert.equal(saved.find(p=>p.prize==='Без выигрыша').prize_limit,null);
+    assert.match(el('prizeChancesFields').textContent,/Осталось: 0/);
+    expire();assert.equal(limits().length,0);
+  } finally {w.close();}
+});
 test('browser login, settings, statistics, prize chances and logout work without Telegram',async()=>{
   const ui=setup();const {el,login,click,db,calls,w}=ui;
   try {

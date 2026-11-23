@@ -112,10 +112,7 @@ test('dashboard release validates preservation without creating a counts table',
 test('winner reports aggregate only real prizes over all configured event days, without API row truncation',async()=>{
   const db=new PGlite();try {
     await db.exec(fixture);
-    for(const name of fs.readdirSync('supabase/migrations').filter(n=>n.endsWith('.sql')).sort())
-      await db.exec(fs.readFileSync('supabase/migrations/'+name,'utf8'));
-    for(const role of ['anon','authenticated']) for(const fn of ['wjx_event_winners(text,integer)','wjx_user_prize_summary(bigint)'])
-      assert.equal((await db.query("select has_function_privilege($1,$2,'EXECUTE') as allowed",[role,fn])).rows[0].allowed,false);
+    // Historical records precede stock enforcement, as they do in production.
     await db.exec(`
       update roulette_settings set event_start='2026-11-27',event_end='2026-11-29';
       update wjx_participants set username='owner_name' where telegram_id=221535678;
@@ -131,8 +128,13 @@ test('winner reports aggregate only real prizes over all configured event days, 
         (382749857,'2026-11-27',1,'Картридж');
       insert into wjx_test_spins(telegram_id,spin_date,spin_number,prize) values (221535678,'2026-11-27',1,'Noir Blade');
       insert into wjx_spins(telegram_id,spin_date,spin_number,prize) select 123456789,'2026-11-28',1,'Бандажка' from generate_series(1,1310);
-      set role service_role;
+
     `);
+    for(const name of fs.readdirSync('supabase/migrations').filter(n=>n.endsWith('.sql')).sort())
+      await db.exec(fs.readFileSync('supabase/migrations/'+name,'utf8'));
+    for(const role of ['anon','authenticated']) for(const fn of ['wjx_event_winners(text,integer)','wjx_user_prize_summary(bigint)'])
+      assert.equal((await db.query("select has_function_privilege($1,$2,'EXECUTE') as allowed",[role,fn])).rows[0].allowed,false);
+    await db.exec('set role service_role');
     const summary=(await db.query('select wjx_user_prize_summary(221535678) as report')).rows[0].report;
     assert.equal(summary.total_wins,4);
     assert.deepEqual(summary.prizes,[{prize:'Noir Blade',quantity:3},{prize:'Картридж',quantity:1}]);
@@ -187,12 +189,14 @@ test('one operation commits one real or test spin, survives late retries and rol
 test('delivery marks persisted real wins once, excludes tests/misses and preserves original game data',async()=>{
   const db=new PGlite();try {
     await db.exec(fixture);
-    for(const name of fs.readdirSync('supabase/migrations').filter(n=>n.endsWith('.sql')).sort())await db.exec(fs.readFileSync('supabase/migrations/'+name,'utf8'));
+    // Historical records precede stock enforcement, as they do in production.
     await db.exec(`update roulette_settings set event_start='2001-01-01',event_end='2001-01-03';
       insert into wjx_spins(telegram_id,spin_date,spin_number,prize) values
       (123456789,'2001-01-01',1,'Картридж'),(123456789,'2001-01-02',1,'Noir Blade'),
       (123456789,'2001-01-02',2,'Без выигрыша'),(123456789,'2001-01-04',1,'Noir Blade');
-      insert into wjx_test_spins(telegram_id,spin_date,spin_number,prize) values(123456789,'2001-01-01',1,'Картридж');set role service_role;`);
+      insert into wjx_test_spins(telegram_id,spin_date,spin_number,prize) values(123456789,'2001-01-01',1,'Картридж');`);
+    for(const name of fs.readdirSync('supabase/migrations').filter(n=>n.endsWith('.sql')).sort())await db.exec(fs.readFileSync('supabase/migrations/'+name,'utf8'));
+    await db.exec('set role service_role');
     const summary=async()=>(await db.query('select wjx_user_prize_summary(123456789) as r')).rows[0].r;
     assert.equal((await summary()).remaining_count,2);assert.equal((await summary()).can_deliver,true);
     const marks=await Promise.all(Array.from({length:10},()=>db.query('select wjx_mark_prizes_delivered($1,$2) as r',[123456789,'a'.repeat(64)])));

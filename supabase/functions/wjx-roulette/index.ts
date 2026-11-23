@@ -552,13 +552,18 @@ async function roulette(req: Request): Promise<Response> {
     if (
       !Array.isArray(prizes) ||
       prizes.length !== 6 ||
+      (prizes.some((item) => item?.prize_limit !== undefined) &&
+        prizes.some((item) => item?.prize_limit === undefined)) ||
       prizes.some(
         (item) =>
           typeof item?.prize !== "string" ||
           typeof item?.chance !== "number" ||
           !Number.isFinite(item.chance) ||
           item.chance < 0 ||
-          item.chance > 100,
+          item.chance > 100 ||
+          (item.prize_limit !== undefined && item.prize_limit !== null &&
+            (!Number.isInteger(item.prize_limit) || item.prize_limit < 0 || item.prize_limit > 1000000)) ||
+          (item.prize === "Без выигрыша" && item.prize_limit != null),
       ) ||
       Math.abs(
           prizes.reduce((sum, item) => sum + item.chance, 0) - 100,
@@ -591,7 +596,11 @@ async function roulette(req: Request): Promise<Response> {
     }
     const { error: saveError } = await supabase
       .from("roulette_prize_chances")
-      .upsert(prizes.map(({ prize, chance }) => ({ prize, chance })), {
+      .upsert(prizes.map(({ prize, chance, prize_limit }) => ({
+        prize, chance,
+        // Older clients may save chances without changing the configured cap.
+        ...(prize_limit === undefined ? {} : { prize_limit }),
+      })), {
         onConflict: "prize",
       });
 
