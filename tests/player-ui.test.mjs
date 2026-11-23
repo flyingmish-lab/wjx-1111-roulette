@@ -209,17 +209,56 @@ test('subscription prompt opens only the official channel and checking never spe
   try {
     p.el('leverButton').click();
     await until(()=>!p.el('subscriptionPanel').hidden&&!p.el('spinButton').disabled);
+    assert.equal(p.alerts.length,1);
+    assert.match(p.alerts[0],/Чтобы крутить рулетку.*@tattoowjxrussia/);
     assert.equal(p.db.operations.size,0);assert.equal(p.db.balances.get(123456789),1);
     p.el('subscribeButton').click();assert.deepEqual(opened,['https://t.me/tattoowjxrussia']);
     p.el('checkSubscriptionButton').click();
     await until(()=>p.el('subscriptionNote').textContent.includes('не найдена')&&!p.el('checkSubscriptionButton').disabled);
     assert.equal(p.db.operations.size,0);
+    assert.equal(p.alerts.length,1);
     p.db.subscribed=true;p.el('checkSubscriptionButton').click();
     await until(()=>p.el('subscriptionPanel').hidden&&!p.el('checkSubscriptionButton').disabled);
     assert.equal(p.db.operations.size,0);
     p.releaseLever();p.el('leverButton').click();
     await until(()=>p.db.operations.size===1&&!p.el('spinButton').disabled);
     assert.equal(p.db.balances.get(123456789),0);
+  } finally {p.w.close();}
+});
+test('lever subscription popup opens the channel only after confirmation and never spends an attempt',async()=>{
+  const popups=[],opened=[];
+  const p=await setupPlayer({prepare:({w,db})=>{
+    db.subscribed=false;
+    w.Telegram.WebApp.showPopup=(params,callback)=>popups.push({params,callback});
+    w.Telegram.WebApp.openTelegramLink=url=>opened.push(url);
+  }});
+  try {
+    p.el('leverButton').click();
+    await until(()=>popups.length===1&&!p.el('spinButton').disabled);
+    assert.equal(popups[0].params.title,'Нужна подписка');
+    assert.match(popups[0].params.message,/Чтобы крутить рулетку.*@tattoowjxrussia/);
+    assert.equal(popups[0].params.buttons[0].text,'Подписаться');
+    assert.equal(p.alerts.length,0);
+    popups[0].callback(null);assert.equal(opened.length,0);
+    popups[0].callback('subscribe');assert.deepEqual(opened,['https://t.me/tattoowjxrussia']);
+    p.el('checkSubscriptionButton').click();
+    await until(()=>!p.el('checkSubscriptionButton').disabled);
+    assert.equal(popups.length,1);
+    assert.equal(p.db.operations.size,0);assert.equal(p.db.balances.get(123456789),1);
+  } finally {p.w.close();}
+});
+for(const mode of ['unsupported','throws'])test(`subscription popup falls back safely when Telegram popup ${mode}`,async()=>{
+  const p=await setupPlayer({prepare:({w,db})=>{
+    db.subscribed=false;
+    w.Telegram.WebApp.showPopup=()=>{throw Error('Popup unavailable');};
+    if(mode==='unsupported')w.Telegram.WebApp.isVersionAtLeast=()=>false;
+  }});
+  try {
+    p.el('leverButton').click();
+    await until(()=>p.alerts.length===1&&!p.el('spinButton').disabled);
+    assert.match(p.alerts[0],/Чтобы крутить рулетку.*@tattoowjxrussia/);
+    assert.equal(p.el('subscriptionPanel').hidden,false);
+    assert.equal(p.db.operations.size,0);assert.equal(p.db.balances.get(123456789),1);
   } finally {p.w.close();}
 });
 test('paused game disables new spins and preserves access to existing prizes',async()=>{

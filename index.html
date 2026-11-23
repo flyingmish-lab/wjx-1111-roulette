@@ -1102,6 +1102,7 @@ async function playSpin(isTest = false, recover = false) {
     if (error.code === "SUBSCRIPTION_REQUIRED") {
       byId("subscriptionPanel").hidden = false;
       byId("subscriptionNote").textContent = "Чтобы крутить рулетку, подпишитесь на наш официальный канал.";
+      showSubscriptionPopup();
     }
     if (error.definitive) {
       pending = null;
@@ -1174,11 +1175,34 @@ function scheduleRefresh() {
   }, Math.max(1000, delay));
 }
 document.addEventListener("visibilitychange", scheduleRefresh);
-byId("subscribeButton").addEventListener("click", () => {
+function openSubscriptionChannel() {
   const url = "https://t.me/tattoowjxrussia";
   if (window.Telegram?.WebApp?.openTelegramLink) window.Telegram.WebApp.openTelegramLink(url);
   else window.open(url,"_blank","noopener,noreferrer");
-});
+}
+function showSubscriptionPopup() {
+  const message = "Чтобы крутить рулетку, подпишитесь на наш Telegram-канал @tattoowjxrussia.";
+  const app = window.Telegram?.WebApp;
+  try {
+    if (app?.showPopup && (!app.isVersionAtLeast || app.isVersionAtLeast("6.2"))) {
+      app.showPopup({
+        title: "Нужна подписка",
+        message,
+        buttons: [
+          {id: "subscribe", type: "default", text: "Подписаться"},
+          {type: "cancel"},
+        ],
+      }, (id) => {
+        if (id === "subscribe") openSubscriptionChannel();
+      });
+      return;
+    }
+  } catch {
+    // Older Telegram clients can expose an unsupported popup method.
+  }
+  window.alert(message);
+}
+byId("subscribeButton").addEventListener("click", openSubscriptionChannel);
 byId("checkSubscriptionButton").addEventListener("click", async () => {
   const check = byId("checkSubscriptionButton"); check.disabled = true;
   try {
