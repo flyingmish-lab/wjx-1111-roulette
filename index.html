@@ -720,7 +720,6 @@ background-attachment: fixed;
     <div>5. —</div>
   </div>
 
-<div class="limit-message" id="limitMessage" style="display: none;"></div>
  <div class="bottom-counter" id="bottomCounter">
   🎰 Сегодня: 0 из 3 прокруток
 </div>
@@ -738,6 +737,7 @@ background-attachment: fixed;
     <button id="checkSubscriptionButton" type="button">Я подписался — проверить</button>
   </section>
   <p id="pauseNotice" hidden role="status">Рулетка временно приостановлена. Попробуйте позже. Ваши выигрыши сохранены.</p>
+  <p id="limitMessage" hidden role="status" style="margin:16px;padding:16px;background:#fff4d5;border-radius:12px"></p>
   <section id="gameStatusPanel" style="margin:16px;padding:16px;background:#fff4d5;border-radius:12px" aria-live="polite">
     <p id="connectionNote" role="status">Загружаем игру…</p>
     <button id="retryLoadButton" type="button" hidden>Повторить загрузку</button>
@@ -880,6 +880,7 @@ function render() {
   const status = getEventStatus();
   const finished = status === "finished";
   const testing = testLeverMode === true;
+  const dailyLimitReached = serverStatusLoaded && !testing && state?.spinsRemaining <= 0;
   const showMachine = testing || !finished;
   byId("finishedMessage").style.display = showMachine ? "none" : "flex";
   document.querySelector(".reels").style.display = showMachine ? "" : "none";
@@ -893,7 +894,7 @@ function render() {
       : "none";
   lever.setAttribute("aria-label", "Потянуть рычаг");
   byId("pauseNotice").hidden = !state?.settings.spins_paused;
-  lever.disabled = spinning || !serverStatusLoaded || !!pending || !!state?.settings.spins_paused;
+  lever.disabled = spinning || !serverStatusLoaded || !!pending || !!state?.settings.spins_paused || dailyLimitReached;
   button.disabled = lever.disabled;
   byId("retryLoadButton").disabled = spinning;
   byId("recoverSpinButton").hidden = !pending;
@@ -911,11 +912,9 @@ function render() {
     : "Загружаем попытки…";
   byId("attemptsCounter").textContent = counter;
   byId("bottomCounter").textContent = counter;
-  byId("limitMessage").textContent = state
-    ? (state.spinsRemaining > 0
-      ? `🎰 Осталось попыток: ${state.spinsRemaining}`
-      : "🔒 На сегодня лимит исчерпан")
-    : "";
+  byId("limitMessage").hidden = !dailyLimitReached || status !== "active" || spinning || !!pending;
+  byId("limitMessage").textContent = "На сегодня все прокрутки использованы." +
+    (state && getMoscowDate() < state.settings.event_end ? " Возвращайтесь завтра!" : "");
   const prizes = byId("myPrizes");
   prizes.replaceChildren();
   byId("myPrizesPanel").hidden = !state;
@@ -1058,6 +1057,10 @@ async function playSpin(isTest = false, recover = false) {
       byId("lastSpinResult").textContent = "Доступные прокрутки закончились.";
       return;
     }
+    if (!isTest && state.spinsRemaining <= 0) {
+      render();
+      return;
+    }
     pending = { operationId: newOperationId(), isTest };
     savePending();
   }
@@ -1085,7 +1088,7 @@ async function playSpin(isTest = false, recover = false) {
       serverStatusLoaded = false;
       byId("retryLoadButton").hidden = false;
     }
-    note("Результат сохранён.");
+    note(serverStatusLoaded ? "" : "Результат сохранён. Нажмите «Повторить загрузку», чтобы обновить попытки.");
     if (!recover) {
       const target = result.prize && prizeImages[result.prize]
         ? Array(4).fill(prizeImages[result.prize])

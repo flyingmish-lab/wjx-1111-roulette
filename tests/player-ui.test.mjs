@@ -285,3 +285,71 @@ test('polling backs off when idle and refreshes on return without querying Teleg
     assert.equal(p.calls.some(c=>c.action==='check_subscription'),false);
   } finally {p.w.close();}
 });
+
+test('last real daily attempt shows a persistent limit notice, clears progress and prevents extra spin requests',async()=>{
+  const p=await setupPlayer({attempts:0,eventStart:'2000-01-01',prepare:({db})=>{
+    db.realSpinsUsed=2;db.dailyHistory=[{prize:'Без выигрыша',spinNumber:1},{prize:'Без выигрыша',spinNumber:2}];
+  }});
+  try {
+    assert.equal(p.el('limitMessage').hidden,true);
+    p.el('leverButton').click();
+    await until(()=>p.db.realSpinsUsed===3&&!p.el('limitMessage').hidden);
+    assert.match(p.el('limitMessage').textContent,/На сегодня все прокрутки использованы/);
+    assert.match(p.el('limitMessage').textContent,/Возвращайтесь завтра/);
+    assert.equal(p.el('connectionNote').textContent,'');
+    assert.equal(p.el('connectionNote').hidden,true);
+    assert.equal(p.el('leverButton').disabled,true);
+    assert.match(p.el('lastSpinResult').textContent,/Результат/);
+    p.releaseLever();p.el('leverButton').click();p.el('spinButton').click();
+    assert.equal(p.calls.filter(c=>c.action==='spin').length,1);
+    p.w.dispatchEvent(new p.w.Event('online'));
+    await until(()=>p.calls.filter(c=>c.action==='status').length===2&&p.el('connectionNote').hidden);
+    assert.equal(p.el('limitMessage').hidden,false);
+    assert.equal(p.el('leverButton').disabled,true);
+  } finally {p.w.close();}
+});
+test('daily limit notice survives reopening and disappears after the server refreshes the Moscow day',async()=>{
+  const p=await setupPlayer({attempts:0,eventStart:'2026-11-27',eventEnd:'2026-11-29',prepare:({db})=>{
+    db.serverNow='2026-11-27T20:59:00Z';db.realSpinsUsed=3;
+  }});
+  try {
+    assert.equal(p.el('limitMessage').hidden,false);assert.equal(p.el('leverButton').disabled,true);
+    p.db.serverNow='2026-11-27T21:01:00Z';p.db.realSpinsUsed=0;p.db.dailyHistory=[];
+    p.w.dispatchEvent(new p.w.Event('online'));
+    await until(()=>p.el('bottomCounter').textContent.includes('0 из 3')&&!p.el('leverButton').disabled);
+    assert.equal(p.el('limitMessage').hidden,true);
+    assert.equal(p.el('connectionNote').textContent,'');
+  } finally {p.w.close();}
+});
+test('unconfirmed last attempt retains recovery controls instead of claiming a confirmed daily limit',async()=>{
+  const p=await setupPlayer({attempts:0,eventStart:'2000-01-01',prepare:({w,db,handler})=>{
+    db.realSpinsUsed=2;
+    w.fetch=async(url,options)=>{
+      const body=JSON.parse(options.body);const response=await handler(new Request(url,{...options,signal:undefined}));
+      if(body.action==='spin')throw Error('Lost committed response');
+      return response;
+    };
+  }});
+  try {
+    p.el('leverButton').click();
+    await until(()=>!p.el('recoverSpinButton').hidden&&!p.el('recoverSpinButton').disabled);
+    assert.equal(p.el('limitMessage').hidden,true);
+    assert.match(p.el('connectionNote').textContent,/Ответ не получен/);
+    p.w.dispatchEvent(new p.w.Event('online'));
+    await until(()=>p.el('recoverSpinButton').hidden&&!p.el('limitMessage').hidden);
+    assert.equal(p.db.realSpinsUsed,3);
+    assert.match(p.el('lastSpinResult').textContent,/Восстановленный результат/);
+  } finally {p.w.close();}
+});
+test('last event day does not promise tomorrow; assigned attempts do not show a real daily limit',async()=>{
+  for(const attempts of [0,1]) {
+    const p=await setupPlayer({attempts,eventStart:'2026-11-27',eventEnd:'2026-11-27',prepare:({db})=>{
+      db.serverNow='2026-11-27T09:00:00Z';db.realSpinsUsed=3;
+    }});
+    try {
+      assert.equal(p.el('limitMessage').hidden,attempts>0);
+      if(!attempts)assert.doesNotMatch(p.el('limitMessage').textContent,/завтра/);
+      else {assert.equal(p.el('leverButton').disabled,false);p.el('leverButton').click();await until(()=>p.db.balances.get(123456789)===0);}
+    } finally {p.w.close();}
+  }
+});
