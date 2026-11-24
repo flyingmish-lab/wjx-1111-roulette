@@ -7,7 +7,7 @@ const migration=fs.readFileSync('supabase/migrations/202611230008_dynamic_spin_c
 async function setup() {
   const db=new PGlite();
   await db.exec(fs.readFileSync('tests/database.test.mjs','utf8').match(/const fixture=`([\s\S]*?)`;/)[1]);
-  for(const file of fs.readdirSync('supabase/migrations').sort().filter(f=>!f.includes('230010')&&f.endsWith('.sql')&&!f.includes('230008')))await db.exec(fs.readFileSync('supabase/migrations/'+file,'utf8'));
+  for(const file of fs.readdirSync('supabase/migrations').sort().filter(f=>!f.includes('230010')&&!f.includes('240011')&&f.endsWith('.sql')&&!f.includes('230008')))await db.exec(fs.readFileSync('supabase/migrations/'+file,'utf8'));
   await db.exec("alter table wjx_spins add constraint wjx_event_dates check(spin_date between '2026-11-10' and '2026-11-12'); alter table wjx_spins add constraint wjx_spins_spin_number_check check(spin_number between 1 and 3);");
   return db;
 }

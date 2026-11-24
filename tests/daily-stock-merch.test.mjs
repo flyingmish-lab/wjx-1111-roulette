@@ -10,7 +10,7 @@ async function setup() {
   await db.exec(fs.readFileSync('tests/database.test.mjs','utf8').match(/const fixture=`([\s\S]*?)`;/)[1]);
   // Historical wins predate stock enforcement and must not be modified by it.
   await db.exec("insert into roulette_prize_chances(prize,chance) values('Noir Blade',0),('Soul Ink',0),('Картридж',0),('Бандажка',0),('Расходники',0); insert into wjx_spins(telegram_id,spin_date,spin_number,prize) select 123456789,(clock_timestamp() at time zone 'Europe/Moscow')::date-1,n,'Noir Blade' from generate_series(1,4) n;");
-  for(const name of fs.readdirSync('supabase/migrations').sort().filter(n=>!n.includes('230010')&&n.endsWith('.sql')&&!n.includes('230009')))await db.exec(fs.readFileSync('supabase/migrations/'+name,'utf8'));
+  for(const name of fs.readdirSync('supabase/migrations').sort().filter(n=>!n.includes('230010')&&!n.includes('240011')&&n.endsWith('.sql')&&!n.includes('230009')))await db.exec(fs.readFileSync('supabase/migrations/'+name,'utf8'));
   return db;
 }
 const stats=async db=>(await db.query('select wjx_admin_prize_stats() as x')).rows[0].x;

@@ -9,7 +9,7 @@ async function database() {
   const db=new PGlite();
   await db.exec(fs.readFileSync('tests/database.test.mjs','utf8').match(/const fixture=`([\s\S]*?)`;/)[1]);
   await db.exec('alter table roulette_prize_chances alter column chance type numeric(5,2)');
-  for(const file of fs.readdirSync('supabase/migrations').sort().filter(f=>!f.includes('230010')&&f.endsWith('.sql')&&!f.includes('230007')&&!f.includes('230009')))await db.exec(fs.readFileSync('supabase/migrations/'+file,'utf8'));
+  for(const file of fs.readdirSync('supabase/migrations').sort().filter(f=>!f.includes('230010')&&!f.includes('240011')&&f.endsWith('.sql')&&!f.includes('230007')&&!f.includes('230009')))await db.exec(fs.readFileSync('supabase/migrations/'+file,'utf8'));
   await db.exec("insert into roulette_prize_chances(prize,chance) values ('Noir Blade',0),('Картридж',0),('Бандажка',0),('Soul Ink',0),('Расходники',0); insert into wjx_spins(telegram_id,spin_date,spin_number,prize) values(123456789,'2020-01-01',1,'Noir Blade');");
   return db;
 }

@@ -156,7 +156,7 @@ test('winner reports aggregate only real prizes over all configured event days, 
 test('one operation commits one real or test spin, survives late retries and rolls back failed attempts',async()=>{
   const db=new PGlite();try {
     await db.exec(fixture);
-    for(const name of fs.readdirSync('supabase/migrations').filter(n=>n.endsWith('.sql')&&!n.includes('230010')).sort())await db.exec(fs.readFileSync('supabase/migrations/'+name,'utf8'));
+    for(const name of fs.readdirSync('supabase/migrations').filter(n=>n.endsWith('.sql')&&!n.includes('230010')&&!n.includes('240011')).sort())await db.exec(fs.readFileSync('supabase/migrations/'+name,'utf8'));
     for(const role of ['anon','authenticated']) {
       for(const table of ['wjx_spin_operations','wjx_prize_deliveries'])assert.equal((await db.query("select has_table_privilege($1,$2,'SELECT') as x",[role,table])).rows[0].x,false);
       for(const fn of ['wjx_perform_spin(bigint,uuid,boolean,text)','wjx_player_state(bigint,uuid)','wjx_mark_prizes_delivered(bigint,text)'])assert.equal((await db.query("select has_function_privilege($1,$2,'EXECUTE') as x",[role,fn])).rows[0].x,false);

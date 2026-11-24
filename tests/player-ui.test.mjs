@@ -386,3 +386,15 @@ for (const failedReel of [false, true]) test(`winning text and history wait for 
     assert.equal(p.calls.filter(call=>call.action==='spin').length,1);
   }finally{p.w.close();}
 });
+
+test('cancelled prize recovery shows cancellation rather than a winning label',async()=>{
+ const operationId='00000000-0000-4000-8000-000000000077';
+ const p=await setupPlayer({prepare:({w,db})=>{
+  w.localStorage.setItem('wjxPendingSpin:123456789',JSON.stringify({operationId,isTest:false}));
+  db.operations.set('123456789:'+operationId,{is_test:false,result:{operationId,isTest:false,spinDate:'2026-11-24',prize:null,prizeReset:true}});
+ }});try{
+  assert.match(p.el('lastSpinResult').textContent,/Приз сброшен/);
+  assert.equal(p.el('recoverSpinButton').hidden,true);
+  assert.equal(p.calls.filter(c=>c.action==='spin').length,0);
+ }finally{p.w.close();}
+});

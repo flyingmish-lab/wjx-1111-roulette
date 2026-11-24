@@ -246,3 +246,23 @@ test('reset retry keeps its UUID when the reset succeeded but user-list refresh 
   assert.match(ui.el('spinUserSelect').textContent,/Осталось: 2/);
  }finally{ui.w.close();}
 });
+
+test('prize reset confirms participant, preserves attempts and retries lost responses with same UUID',async()=>{
+ const ui=setup();const {w,el,login,click,db,calls}=ui;try{
+  await login();db.eventWinCount=2;
+  const prompts=[];w.confirm=text=>{prompts.push(text);return false;};
+  click('resetUserPrizesButton');assert.equal(calls.some(c=>c.body.action==='admin_reset_user_prizes'),false);
+  assert.match(prompts[0],/123456789/);assert.match(prompts[0],/не вернутся в запас/);
+  w.confirm=()=>true;
+  const fetch=w.fetch;let lose=true;
+  w.fetch=async(url,options)=>{const response=await fetch(url,options);if(JSON.parse(options.body).action==='admin_reset_user_prizes'&&lose){lose=false;throw Error('Lost response');}return response;};
+  const used=db.realSpinsUsed;click('resetUserPrizesButton');
+  await until(()=>!el('resetUserPrizesButton').disabled);
+  assert.equal(db.eventWinCount,0);assert.equal(db.realSpinsUsed,used);
+  db.eventWinCount=1;click('resetUserPrizesButton');await until(()=>el('statusMessage').textContent.includes('Ранее выполненный сброс'));
+  const resets=calls.filter(c=>c.body.action==='admin_reset_user_prizes');assert.equal(resets.length,2);
+  assert.equal(resets[0].body.requestId,resets[1].body.requestId);assert.equal(db.eventWinCount,1);
+  assert.match(el('statusMessage').textContent,/123456789/);
+  assert.equal(w.sessionStorage.getItem('wjxDailyReset:prizes:123456789'),null);
+ }finally{w.close();}
+});

@@ -76,7 +76,7 @@ test('migration avoids unchanged profile writes, enforces transactional pause an
   const db=new PGlite();
   try {
     const fixture=fs.readFileSync('tests/database.test.mjs','utf8').match(/const fixture=`([\s\S]*?)`;/)[1];await db.exec(fixture);
-    for(const name of fs.readdirSync('supabase/migrations').filter(n=>!n.includes('230010')).sort())await db.exec(fs.readFileSync('supabase/migrations/'+name,'utf8'));
+    for(const name of fs.readdirSync('supabase/migrations').filter(n=>!n.includes('230010')&&!n.includes('240011')).sort())await db.exec(fs.readFileSync('supabase/migrations/'+name,'utf8'));
     await db.exec("select wjx_register_player(123456789,'New name','new_nick')");
     const row=(await db.query('select ctid::text,joined_at from wjx_participants where telegram_id=123456789')).rows[0];
     await db.exec("select wjx_register_player(123456789,'New name','new_nick')");

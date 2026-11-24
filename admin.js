@@ -27,6 +27,7 @@ function clearSession(text = "") {
   byId("spinUserSelect").replaceChildren();
   byId("spinUserSearch").value = "";
   byId("spinUsersNote").textContent = "";
+  byId("resetUserPrizesButton").disabled = true;
   spinUsersOffset = 0;
   winnersOffset = 0;
   winnersRequestVersion += 1;
@@ -156,7 +157,7 @@ async function loadPrizes() {
   ) {
     const line = document.createElement("p");
     line.textContent =
-      `${item.prize} — шанс ${item.chance}% | Лимит в день: ${item.prize_limit ?? "без ограничения"} | Сегодня выиграно: ${item.todayWins} | Осталось сегодня: ${item.remainingToday ?? "без ограничения"} | Всего выигрышей: ${item.realWins}`;
+      `${item.prize} — шанс ${item.chance}% | Лимит в день: ${item.prize_limit ?? "без ограничения"} | Сегодня выиграно: ${item.todayWins} | Осталось сегодня: ${item.remainingToday ?? "без ограничения"} | Всего начислено: ${item.realWins} | Сброшено: ${item.resetWins ?? 0}`;
     panel.append(line);
   }
   const history = byId("winsHistory");
@@ -172,7 +173,7 @@ async function loadPrizes() {
       : spin.first_name || "Участник";
     if (spin.telegram_id) line.append(winnerButton(spin.telegram_id, name));
     else line.append(name);
-    line.append(` | ${spin.spin_date} | ${spin.prize}`);
+    line.append(` | ${spin.spin_date} | ${spin.prize}${spin.prize_reset ? " — сброшен" : ""}`);
     history.append(line);
   }
 }
@@ -355,7 +356,8 @@ function newResetId() {
   return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
 }
 const pendingResets = new Map();
-function resetRequestId(id) {
+function resetRequestId(id, kind = "daily") {
+  id = kind === "daily" ? id : `prizes:${id}`;
   if (pendingResets.has(id)) return pendingResets.get(id);
   let requestId;
   try {requestId = sessionStorage.getItem(`wjxDailyReset:${id}`);} catch {}
@@ -366,7 +368,8 @@ function resetRequestId(id) {
   try {sessionStorage.setItem(`wjxDailyReset:${id}`, requestId);} catch {}
   return requestId;
 }
-function clearResetRequest(id) {
+function clearResetRequest(id, kind = "daily") {
+  id = kind === "daily" ? id : `prizes:${id}`;
   pendingResets.delete(id);
   try {sessionStorage.removeItem(`wjxDailyReset:${id}`);} catch {}
 }
@@ -387,6 +390,7 @@ async function loadSpinUsers() {
   byId("prevSpinUsersButton").disabled = spinUsersOffset === 0;
   byId("nextSpinUsersButton").disabled = !result.has_more;
   byId("resetDailySpinsButton").disabled = result.users.length === 0;
+  byId("resetUserPrizesButton").disabled = result.users.length === 0;
   byId("spinUsersNote").textContent = result.users.length
     ? `Попытки за ${result.spinDate.split("-").reverse().join(".")} (МСК). После сброса игроку нужно нажать «Обновить попытки» или заново открыть Mini App.`
     : "Пользователи не найдены. Они появятся после первого входа в Mini App.";
@@ -641,4 +645,23 @@ byId("checkChannelButton").addEventListener("click", async () => {
   } finally {
     button.disabled = false;
   }
+});
+
+byId("resetUserPrizesButton").addEventListener("click", async () => {
+  const select = byId("spinUserSelect");
+  const telegram_id = select.value;
+  if (!adminToken || !telegram_id) {message("Выберите пользователя."); return;}
+  const name = select.selectedOptions[0].textContent.split(" | ")[0];
+  if (!confirm(`Сбросить все призы ${name} (ID ${telegram_id}) за даты текущего розыгрыша, включая выданные? Попытки не изменятся, призы не вернутся в запас. История сохранится.`)) return;
+  const button = byId("resetUserPrizesButton");
+  if (button.disabled) return;
+  button.disabled = true;
+  select.disabled = true;
+  try {
+    const result = await adminApi("admin_reset_user_prizes", {telegram_id, requestId: resetRequestId(telegram_id, "prizes")});
+    await Promise.all([loadPrizes(), loadWinners()]);
+    clearResetRequest(telegram_id, "prizes");
+    message(`${result.replayed ? "Ранее выполненный сброс подтверждён" : "Призы сброшены"}: ${name} (ID ${telegram_id}). Призов: ${result.reset_count}. Попытки и расход дневного запаса сохранены.`);
+  } catch (error) {message(error.message);}
+  finally {select.disabled = false; button.disabled = !adminToken || select.options.length === 0;}
 });

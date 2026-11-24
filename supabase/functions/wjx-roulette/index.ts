@@ -151,6 +151,7 @@ async function roulette(req: Request): Promise<Response> {
     "admin_get_user_wins",
     "admin_spin_users",
     "admin_reset_daily_spins",
+    "admin_reset_user_prizes",
     "admin_test_users",
     "admin_set_test_spins",
     "admin_get_settings",
@@ -395,6 +396,13 @@ async function roulette(req: Request): Promise<Response> {
       );
     }
     let result = previous?.result;
+    if (previous) {
+      const visible = await supabase.rpc("wjx_visible_operation_result", {
+        p_telegram_id: telegramUserId, p_request_id: operationId,
+      });
+      if (visible.error || !visible.data) throw new Error("Operation unavailable");
+      result = visible.data;
+    }
     if (!previous) {
       if (
         !(await isChannelSubscriber(telegramBotToken ?? "", telegramUserId))
@@ -545,6 +553,20 @@ async function roulette(req: Request): Promise<Response> {
     if (error?.code === "P0002") return json({ success: false, error: "Пользователь не найден" }, 404);
     if (error?.code === "22023") return json({ success: false, error: "Некорректный запрос сброса" }, 400);
     if (error || !data) throw new Error("Daily reset unavailable");
+    return json({ success: true, ...data });
+  }
+  if (action === "admin_reset_user_prizes") {
+    const id = Number(requestData.telegram_id);
+    const requestId = requestData.requestId;
+    if (!Number.isSafeInteger(id) || id <= 0 || !validOperationId(requestId)) {
+      return json({ success: false, error: "Выберите пользователя и обновите запрос сброса." }, 400);
+    }
+    const { data, error } = await supabase.rpc("wjx_reset_user_prizes", {
+      p_telegram_id: id, p_request_id: requestId, p_admin_session_hash: adminSessionHash,
+    });
+    if (error?.code === "P0002") return json({ success: false, error: "Пользователь не найден" }, 404);
+    if (error?.code === "22023") return json({ success: false, error: "Некорректный запрос сброса" }, 400);
+    if (error || !data) throw new Error("Prize reset unavailable");
     return json({ success: true, ...data });
   }
   if (action === "admin_save_prize_chances") {

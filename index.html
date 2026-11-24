@@ -866,6 +866,7 @@ function applyState(value) {
   ) {
     throw Error("Не удалось прочитать состояние игры. Повторите загрузку.");
   }
+  if (state && state.prizeResetVersion !== value.prizeResetVersion) byId("lastSpinResult").textContent = "";
   state = value;
   serverAnchor = Date.parse(value.serverNow);
   performanceAnchor = performance.now();
@@ -951,7 +952,7 @@ function prizeLabel(prize) {
 function showResult(result, recovered = false) {
   const text = `${recovered ? "Восстановленный результат" : "Результат"} ${
     result.spinDate.split("-").reverse().join(".")
-  }: ${prizeLabel(result.prize)}`;
+  }: ${result.prizeReset ? "Приз сброшен" : prizeLabel(result.prize)}`;
   byId("lastSpinResult").textContent = text;
 }
 async function api(body) {

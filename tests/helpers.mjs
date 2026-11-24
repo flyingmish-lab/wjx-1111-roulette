@@ -12,9 +12,16 @@ export const prizes = ['Картридж', 'Расходники', 'Noir Blade',
 export function mockDb() {
   const currentDay=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(db.serverNow||Date.now()));
   const baseline=id=>db.baselines.get(id+':'+currentDay())||0;
-  const db = { resets: new Map(), baselines: new Map(), prizes: prizes.map(p=>({...p})), sessions: new Map(), balances: new Map(), eventWinCount: 0, operations: new Map(), deliveries: new Map(), realSpinsUsed: 1, dailyHistory: [{prize:'Без выигрыша',spinNumber:1}], calls: [], attempts: 0, settings: {...baseSettings}, failLimiter: false, failSessions: false,
+  const db = { prizeResets: new Map(), resets: new Map(), baselines: new Map(), prizes: prizes.map(p=>({...p})), sessions: new Map(), balances: new Map(), eventWinCount: 0, operations: new Map(), deliveries: new Map(), realSpinsUsed: 1, dailyHistory: [{prize:'Без выигрыша',spinNumber:1}], calls: [], attempts: 0, settings: {...baseSettings}, failLimiter: false, failSessions: false,
     async rpc(name, args) {
       db.calls.push({ rpc: name, args });
+      if (name === 'wjx_visible_operation_result') return {data:db.operations.get(args.p_telegram_id+':'+args.p_request_id)?.result||null};
+      if (name === 'wjx_reset_user_prizes') {
+        const old=db.prizeResets.get(args.p_request_id);
+        if(old)return old.telegram_id===String(args.p_telegram_id)?{data:{...old,replayed:true}}:{error:{code:'22023'}};
+        const result={telegram_id:String(args.p_telegram_id),reset_count:db.eventWinCount,replayed:false};
+        db.eventWinCount=0;db.prizeResets.set(args.p_request_id,result);return {data:result};
+      }
       if (name === 'wjx_register_player') return {data:null};
       if (name === 'wjx_mark_prizes_delivered') {
         const old=db.deliveries.get(args.p_telegram_id)||0;db.deliveries.set(args.p_telegram_id,db.eventWinCount);
