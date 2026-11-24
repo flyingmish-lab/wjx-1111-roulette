@@ -1081,7 +1081,7 @@ async function playSpin(recover = false) {
       note("Рулетка крутится…");
       const target = result.prize && prizeImages[result.prize]
         ? Array(4).fill(prizeImages[result.prize])
-        : symbols.slice(0, 4);
+        : randomLosingSymbols();
       try {
         await Promise.allSettled(
           reels.map((reel, index) => spinReel(reel, index, target[index])),
@@ -1246,6 +1246,19 @@ function makeSymbol(value, height) {
 
 function randomSymbol() {
   return symbols[Math.floor(Math.random() * symbols.length)];
+}
+
+let lastLosingSymbols = [];
+function randomLosingSymbols() {
+  const first = Array.from({ length: 3 }, randomSymbol);
+  const choices = symbols.filter((symbol) =>
+    !first.every((value) => value === symbol) &&
+    !(first.every((value, index) => value === lastLosingSymbols[index]) &&
+      symbol === lastLosingSymbols[3])
+  );
+  const result = [...first, choices[Math.floor(Math.random() * choices.length)]];
+  lastLosingSymbols = result;
+  return result;
 }
 
 function setInitialReel(reel) {

@@ -398,3 +398,41 @@ test('cancelled prize recovery shows cancellation rather than a winning label',a
   assert.equal(p.calls.filter(c=>c.action==='spin').length,0);
  }finally{p.w.close();}
 });
+
+
+test('misses use varying reel combinations without four matching symbols or another server request',async()=>{
+ const p=await setupPlayer({prepare:({w,db})=>{
+  w.Math.random=()=>0;
+  db.prizes=db.prizes.map(prize=>({...prize,chance:prize.prize==='Без выигрыша'?100:0}));
+ }});try{
+  const outcomes=[];
+  for(let n=0;n<2;n++){
+   p.el('leverButton').click();
+   await until(()=>p.db.realSpinsUsed===n+2&&p.el('connectionNote').hidden);
+   const combo=[...p.w.document.querySelectorAll('.reel')].map(reel=>reel.querySelector('img').getAttribute('src'));
+   assert.ok(new Set(combo).size>1,'a miss cannot show four matching prize symbols');
+   outcomes.push(combo);
+   assert.match(p.el('lastSpinResult').textContent,/Без выигрыша/);
+   p.releaseLever();
+  }
+  assert.notDeepEqual(outcomes[0],outcomes[1],'consecutive misses show different combinations even with identical random draws');
+  assert.equal(p.calls.filter(c=>c.action==='spin').length,2);
+  assert.equal(p.db.operations.size,2);
+ }finally{p.w.close();}
+});
+
+test('losing combinations allow pairs, two pairs and three matching symbols',async()=>{
+ const p=await setupPlayer();try{
+  for(const [draws,counts] of [
+   [[0,0,0,0],[3,1]],
+   [[0,0,0.2,0.5],[2,1,1]],
+   [[0,0,0.2,0.2],[2,2]],
+  ]){
+   const sequence=[...draws];p.w.Math.random=()=>sequence.shift()??0;
+   const combo=p.w.randomLosingSymbols();
+   const actual=[...new Set(combo)].map(symbol=>combo.filter(v=>v===symbol).length).sort((a,b)=>b-a);
+   assert.deepEqual(actual,counts);
+   assert.equal(combo.length,4);
+  }
+ }finally{p.w.close();}
+});
